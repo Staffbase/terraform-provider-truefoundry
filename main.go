@@ -21,7 +21,7 @@ func main() {
 	flag.Parse()
 
 	err := providerserver.Serve(context.Background(), provider.New(version), providerserver.ServeOpts{
-		Address: "registry.terraform.io/staffbase/truefoundry",
+		Address: "terraform.staffbase.com/staffbase/truefoundry",
 		Debug:   debug,
 	})
 	if err != nil {

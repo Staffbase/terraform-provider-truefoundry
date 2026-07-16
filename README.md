@@ -22,11 +22,15 @@ Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraf
 
 ## Getting started
 
+The provider is published to the Staffbase Terraform Enterprise private
+registry. Outside of TFE workspaces, authenticate once with
+`terraform login terraform.staffbase.com`.
+
 ```hcl
 terraform {
   required_providers {
     truefoundry = {
-      source = "staffbase/truefoundry"
+      source = "terraform.staffbase.com/staffbase/truefoundry"
     }
   }
 }
@@ -236,9 +240,14 @@ go run ./cmd/mock-control-plane &                # mock control plane on :8330
 go build -o /tmp/tfy-bin/terraform-provider-truefoundry .
 cat > /tmp/dev.tfrc <<'EOF'
 provider_installation {
-  dev_overrides { "registry.terraform.io/staffbase/truefoundry" = "/tmp/tfy-bin" }
+  dev_overrides { "terraform.staffbase.com/staffbase/truefoundry" = "/tmp/tfy-bin" }
   direct {}
 }
 EOF
 cd examples/demo && TF_CLI_CONFIG_FILE=/tmp/dev.tfrc terraform apply
 ```
+
+## Releasing
+
+Pushing a `v*` tag builds, signs, and publishes the provider to the
+Terraform Enterprise private registry — see [RELEASING.md](RELEASING.md).
