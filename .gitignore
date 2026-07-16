@@ -1,0 +1,11 @@
+# Local files
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+
+# Build artifacts
+/terraform-provider-truefoundry
+/live-validate
+/dist/
