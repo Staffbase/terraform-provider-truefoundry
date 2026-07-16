@@ -9,6 +9,20 @@ uploads them to the registry via the
 
 ## Cutting a release
 
+[Release-drafter](.github/release-drafter.yml) keeps a draft GitHub release up
+to date on every push to `main`; the next version is resolved from PR labels
+(`breaking` → major, `feature`/`enhancement` → minor, everything else →
+patch).
+
+To release: open the [draft release](https://github.com/Staffbase/terraform-provider-truefoundry/releases),
+review notes and version, and click **Publish**. Publishing creates the `v*`
+tag, which triggers the *Release* workflow (goreleaser attaches the signed
+artifacts to the release and `scripts/publish-tfe.sh` uploads them to the
+registry).
+
+Pushing a tag manually also works (the workflow then creates the GitHub
+release itself, without drafted notes):
+
 ```sh
 git checkout main && git pull
 git tag v0.2.0

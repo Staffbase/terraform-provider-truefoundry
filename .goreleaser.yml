@@ -55,9 +55,17 @@ signs:
       - "${artifact}"
 
 release:
+  # release-drafter owns the release notes: publishing its draft creates the
+  # tag that triggers the release build, so leave the existing release
+  # untouched and only attach the artifacts.
+  mode: keep-existing
   # The registry manifest is not consumed by the TFE private registry API,
   # but attaching it to the GitHub release keeps a later public-registry
   # publish possible.
   extra_files:
     - glob: "terraform-registry-manifest.json"
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
+
+changelog:
+  # release notes come from release-drafter
+  disable: true

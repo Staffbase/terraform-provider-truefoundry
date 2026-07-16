@@ -1,0 +1,36 @@
+# Providers are consumed with semver constraints (e.g. `~> 0.1`), so unlike
+# the calver used by service repos, the version is resolved from PR labels.
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+
+version-resolver:
+  major:
+    labels:
+      - "breaking"
+  minor:
+    labels:
+      - "feature"
+      - "enhancement"
+  default: patch
+
+categories:
+  - title: "🚀 Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "🐛 Bug Fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "🧰 Maintenance"
+    labels:
+      - "chore"
+      - "dependencies"
+
+exclude-labels:
+  - "skip-changelog"
+
+template: |
+  ## Changes
+
+  $CHANGES
