@@ -10,7 +10,7 @@ fmt:
 	gofmt -w .
 
 lint:
-	gofmt -l .
+	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then echo "gofmt required for:"; echo "$$unformatted"; exit 1; fi
 	go vet ./...
 
 test:
