@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     truefoundry = {
-      source = "registry.terraform.io/staffbase/truefoundry"
+      source = "terraform.staffbase.com/staffbase/truefoundry"
     }
   }
 }

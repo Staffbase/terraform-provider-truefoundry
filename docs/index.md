@@ -10,23 +10,23 @@ description: |-
 The TrueFoundry provider manages [TrueFoundry](https://www.truefoundry.com)
 AI Gateway resources on a TrueFoundry control plane:
 
-- **Model access** — [provider accounts](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/provider_account) (OpenAI,
+- **Model access** — [provider accounts](resources/provider_account.md) (OpenAI,
   Azure OpenAI, Azure AI Foundry, AWS Bedrock, virtual models) and the models
-  exposed through them, plus [custom endpoint accounts](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/custom_endpoint_account)
+  exposed through them, plus [custom endpoint accounts](resources/custom_endpoint_account.md)
   for arbitrary HTTP services proxied by the gateway. The
-  [models data source](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/data-sources/models) lists everything on the gateway.
+  [models data source](data-sources/models.md) lists everything on the gateway.
 - **Gateway configuration** — tenant-wide singletons for
-  [budgets](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/gateway_budget_config),
-  [data access](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/gateway_data_access_config),
-  [data routing](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/gateway_data_routing_config), and
-  [guardrail wiring](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/gateway_guardrails_config), plus
-  [guardrail groups](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/guardrail_group) (Azure Prompt Shield and
+  [budgets](resources/gateway_budget_config.md),
+  [data access](resources/gateway_data_access_config.md),
+  [data routing](resources/gateway_data_routing_config.md), and
+  [guardrail wiring](resources/gateway_guardrails_config.md), plus
+  [guardrail groups](resources/guardrail_group.md) (Azure Prompt Shield and
   Content Safety).
-- **Platform integrations** — [Azure blob storage](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/azure_account),
-  [Slack notification channels](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/slack_account),
-  [HashiCorp Vault secret stores](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/hashicorp_account), and the
-  [built-in system secret store](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/system_secret_store).
-- **Access** — [virtual accounts](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/virtual_account) (service
+- **Platform integrations** — [Azure blob storage](resources/azure_account.md),
+  [Slack notification channels](resources/slack_account.md),
+  [HashiCorp Vault secret stores](resources/hashicorp_account.md), and the
+  [built-in system secret store](resources/system_secret_store.md).
+- **Access** — [virtual accounts](resources/virtual_account.md) (service
   accounts) with scoped permissions and token handling.
 
 ## Example Usage
@@ -35,7 +35,7 @@ AI Gateway resources on a TrueFoundry control plane:
 terraform {
   required_providers {
     truefoundry = {
-      source = "staffbase/truefoundry"
+      source = "terraform.staffbase.com/staffbase/truefoundry"
     }
   }
 }
@@ -54,7 +54,7 @@ The provider authenticates against the control plane with a Bearer API token.
 and `TFY_API_KEY` environment variables.
 
 The API key can be a personal access token or a virtual account token. For
-CI/CD, prefer a dedicated [virtual account](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/virtual_account) whose
+CI/CD, prefer a dedicated [virtual account](resources/virtual_account.md) whose
 permissions are limited to the resources Terraform manages.
 
 ## Handling secrets
@@ -67,8 +67,8 @@ tokens, …) accepts either a raw value or a TrueFoundry secret reference such a
 stored: secret references round-trip cleanly and enable drift detection, while
 raw values end up in the Terraform state (and, on refresh or import, are read
 back into it). Secret references can point at a
-[HashiCorp Vault secret store](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/hashicorp_account) or the
-[system secret store](https://registry.terraform.io/providers/staffbase/truefoundry/latest/docs/resources/system_secret_store) — both manageable with
+[HashiCorp Vault secret store](resources/hashicorp_account.md) or the
+[system secret store](resources/system_secret_store.md) — both manageable with
 this provider.
 
 ## Importing existing resources

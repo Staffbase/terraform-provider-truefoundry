@@ -1,0 +1,19 @@
+name: Release Drafter
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  draft_release:
+    name: Create Release Draft
+    permissions:
+      contents: write
+      pull-requests: read
+    uses: Staffbase/gha-workflows/.github/workflows/template_release_drafter.yml@v15.1.1
+    secrets:
+      client_id: ${{ vars.STAFFBASE_ACTIONS_CLIENT_ID }}
+      private_key: ${{ secrets.STAFFBASE_ACTIONS_PRIVATE_KEY }}
