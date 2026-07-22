@@ -138,7 +138,7 @@ resource "truefoundry_provider_account" "virtual" {
 
 ### Required
 
-- `models` (Attributes List) Models exposed on the gateway through this provider account. (see [below for nested schema](#nestedatt--models))
+- `models` (Attributes List) Models exposed on the gateway through this provider account. Order is not significant; changes that only reorder models produce no diff. (see [below for nested schema](#nestedatt--models))
 - `name` (String) Name of the provider account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
 
 ### Optional
@@ -161,14 +161,14 @@ resource "truefoundry_provider_account" "virtual" {
 
 Required:
 
-- `model_types` (List of String) Model capabilities. One or more of: `chat`, `completion`, `embedding`, `realtime`, `rerank`, `audio_transcription`, `audio_translation`, `text_to_speech`, `moderation`, `image`, `responses`, `ocr`.
+- `model_types` (Set of String) Model capabilities. One or more of: `chat`, `completion`, `embedding`, `realtime`, `rerank`, `audio_transcription`, `audio_translation`, `text_to_speech`, `moderation`, `image`, `responses`, `ocr`.
 - `name` (String) Name identifying this model integration.
 
 Optional:
 
 - `api_key` (String, Sensitive) API key of the Azure AI Foundry deployment. Required for `azure-foundry` models, where auth is per model. Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state).
 - `api_version` (String) Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry`.
-- `authorized_subjects` (List of String) Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. The control plane rejects `serviceaccount:` subjects here. Unset means account-level access.
+- `authorized_subjects` (Set of String) Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. The control plane rejects `serviceaccount:` subjects here. Unset means account-level access.
 - `azure_endpoint` (String) Azure AI Foundry endpoint URL, e.g. https://{deployment}.{region}.models.ai.azure.com. Required for `azure-foundry` models.
 - `cost` (Attributes) Optional pricing of this model, used for gateway cost tracking. Token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. Volume-based pricing tiers are not supported. (see [below for nested schema](#nestedatt--models--cost))
 - `deployment_type` (String) Azure OpenAI deployment type. One of: `standard`, `datazone_us`, `datazone_eu`, `global` (`azure-openai` only).
@@ -199,7 +199,7 @@ Optional:
 
 Required:
 
-- `targets` (Attributes List) Target models routed to. `weight` is required for weight-based routing, `priority` for priority-based routing. (see [below for nested schema](#nestedatt--models--routing--targets))
+- `targets` (Attributes Set) Target models routed to. `weight` is required for weight-based routing, `priority` for priority-based routing. (see [below for nested schema](#nestedatt--models--routing--targets))
 - `type` (String) Routing strategy. One of: `weight-based-routing`, `priority-based-routing`.
 
 <a id="nestedatt--models--routing--targets"></a>
@@ -212,7 +212,7 @@ Required:
 Optional:
 
 - `fallback_candidate` (Boolean) Whether this target may serve as a fallback for other targets.
-- `fallback_status_codes` (List of String) Status codes for which the request falls back to other targets.
+- `fallback_status_codes` (Set of String) Status codes for which the request falls back to other targets.
 - `headers_override` (Attributes) Headers to remove from or set on the upstream request for this target. (see [below for nested schema](#nestedatt--models--routing--targets--headers_override))
 - `metadata_match` (Map of String) Metadata key-value pairs that must match incoming request metadata headers for this target to be considered.
 - `priority` (Number) Priority of the target; 0 is highest (priority-based routing).
@@ -223,7 +223,7 @@ Optional:
 
 Optional:
 
-- `remove` (List of String) Headers to remove from the upstream request.
+- `remove` (Set of String) Headers to remove from the upstream request.
 - `set` (Map of String) Headers to add or overwrite on the upstream request.
 
 ## Import

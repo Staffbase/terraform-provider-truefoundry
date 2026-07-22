@@ -49,8 +49,10 @@ func TestAccHashicorpAccount_lifecycle(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "fqn", mockcp.Tenant+":hashicorp:spike-vault-secrets"),
 					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.0.approle.role_id", "tfy-secret://tenant:system:vault-role-id"),
-					resource.TestCheckNoResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.0.token"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
+						"name":            "vault",
+						"approle.role_id": "tfy-secret://tenant:system:vault-role-id",
+					}),
 				),
 			},
 			// In-place update: switch to token auth, add namespace and a
@@ -81,9 +83,18 @@ resource "truefoundry_hashicorp_account" "secrets" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.0.namespace", "team-a"),
-					resource.TestCheckNoResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.0.approle"),
-					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.1.authorized_subjects.0", "team:everyone"),
+					// The first store switched from approle to token auth
+					// (approle absence is not addressable in sets).
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
+						"name":      "vault",
+						"namespace": "team-a",
+						"token":     "hvs.XXXXXXXXXXXXXXXXXXXX",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
+						"name":                  "vault-eu",
+						"authorized_subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_hashicorp_account.secrets", "vaults.*.authorized_subjects.*", "team:everyone"),
 				),
 			},
 		},
@@ -129,7 +140,7 @@ resource "truefoundry_hashicorp_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("Exactly one of `token` and `approle`"),
+			want: regexp.MustCompile("exactly one of `token` and `approle`"),
 		},
 		{
 			name: "both auth methods",
@@ -150,7 +161,7 @@ resource "truefoundry_hashicorp_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("Exactly one of `token` and `approle`"),
+			want: regexp.MustCompile("exactly one of `token` and `approle`"),
 		},
 		{
 			name: "missing kv mount path",

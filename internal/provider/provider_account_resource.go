@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -199,9 +200,11 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 					"Accepts a TrueFoundry secret reference (recommended).",
 			},
 			"models": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "Models exposed on the gateway through this provider account.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Required: true,
+				Description: "Models exposed on the gateway through this provider account. " +
+					"Order is not significant; changes that only reorder models produce no diff.",
+				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -215,13 +218,13 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 							Optional:    true,
 							Description: "Provider model identifier or Azure deployment name, e.g. gpt-4o. Required for all provider types except `virtual-model`.",
 						},
-						"model_types": schema.ListAttribute{
+						"model_types": schema.SetAttribute{
 							Required:    true,
 							ElementType: types.StringType,
 							Description: fmt.Sprintf("Model capabilities. One or more of: `%s`.", strings.Join(modelTypeValues, "`, `")),
-							Validators: []validator.List{
-								listvalidator.SizeAtLeast(1),
-								listvalidator.ValueStringsAre(stringvalidator.OneOf(modelTypeValues...)),
+							Validators: []validator.Set{
+								setvalidator.SizeAtLeast(1),
+								setvalidator.ValueStringsAre(stringvalidator.OneOf(modelTypeValues...)),
 							},
 						},
 						"cost": schema.SingleNestedAttribute{
@@ -256,7 +259,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 								},
 							},
 						},
-						"authorized_subjects": schema.ListAttribute{
+						"authorized_subjects": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. " +
@@ -306,10 +309,10 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 										stringvalidator.OneOf(routingTypeValues...),
 									},
 								},
-								"targets": schema.ListNestedAttribute{
+								"targets": schema.SetNestedAttribute{
 									Required:    true,
 									Description: "Target models routed to. `weight` is required for weight-based routing, `priority` for priority-based routing.",
-									Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+									Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 									NestedObject: schema.NestedAttributeObject{
 										Attributes: map[string]schema.Attribute{
 											"target": schema.StringAttribute{
@@ -324,7 +327,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 												Optional:    true,
 												Description: "Priority of the target; 0 is highest (priority-based routing).",
 											},
-											"fallback_status_codes": schema.ListAttribute{
+											"fallback_status_codes": schema.SetAttribute{
 												Optional:    true,
 												ElementType: types.StringType,
 												Description: "Status codes for which the request falls back to other targets.",
@@ -342,7 +345,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 												Optional:    true,
 												Description: "Headers to remove from or set on the upstream request for this target.",
 												Attributes: map[string]schema.Attribute{
-													"remove": schema.ListAttribute{
+													"remove": schema.SetAttribute{
 														Optional:    true,
 														ElementType: types.StringType,
 														Description: "Headers to remove from the upstream request.",
@@ -409,10 +412,12 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 				fmt.Sprintf("`%s` %s for provider_type %q.", attr, why, providerType))
 		}
 	}
-	requireModel := func(cond bool, i int, attr, why string) {
+	// models is a set, so elements have no addressable index; errors are
+	// anchored at the attribute and name the offending model in the message.
+	requireModel := func(cond bool, name, attr, why string) {
 		if !cond {
-			resp.Diagnostics.AddAttributeError(path.Root("models").AtListIndex(i).AtName(attr), "Invalid model configuration",
-				fmt.Sprintf("`models[%d].%s` %s for provider_type %q.", i, attr, why, providerType))
+			resp.Diagnostics.AddAttributeError(path.Root("models"), "Invalid model configuration",
+				fmt.Sprintf("`%s` of model %q %s for provider_type %q.", attr, name, why, providerType))
 		}
 	}
 
@@ -420,49 +425,53 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 	case "openai":
 		requireAccount(!config.APIKey.IsNull(), "api_key", "is required")
 		requireAccount(config.AzureEndpoint.IsNull(), "azure_endpoint", "must not be set")
-		for i, m := range config.Models {
-			requireModel(m.APIVersion.IsNull(), i, "api_version", "must not be set")
-			requireModel(m.FoundationModel.IsNull(), i, "foundation_model", "must not be set")
-			requireModel(m.DeploymentType.IsNull(), i, "deployment_type", "must not be set")
-			requireModel(m.Region.IsNull(), i, "region", "must not be set")
-			requireModel(m.APIKey.IsNull(), i, "api_key", "must not be set")
-			requireModel(m.AzureEndpoint.IsNull(), i, "azure_endpoint", "must not be set")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(m.APIVersion.IsNull(), name, "api_version", "must not be set")
+			requireModel(m.FoundationModel.IsNull(), name, "foundation_model", "must not be set")
+			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
+			requireModel(m.Region.IsNull(), name, "region", "must not be set")
+			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set")
+			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set")
 		}
 	case "azure-openai":
 		requireAccount(!config.APIKey.IsNull(), "api_key", "is required")
 		requireAccount(!config.AzureEndpoint.IsNull(), "azure_endpoint", "is required")
 		requireAccount(config.BaseURL.IsNull(), "base_url", "must not be set")
-		for i, m := range config.Models {
-			requireModel(!m.APIVersion.IsNull(), i, "api_version", "is required")
-			requireModel(m.APIKey.IsNull(), i, "api_key", "must not be set")
-			requireModel(m.AzureEndpoint.IsNull(), i, "azure_endpoint", "must not be set")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(!m.APIVersion.IsNull(), name, "api_version", "is required")
+			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set")
+			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set")
 		}
 	case "azure-foundry":
 		requireAccount(config.APIKey.IsNull(), "api_key", "must not be set (auth is configured per model)")
 		requireAccount(config.AzureEndpoint.IsNull(), "azure_endpoint", "must not be set (endpoints are configured per model)")
 		requireAccount(config.BaseURL.IsNull(), "base_url", "must not be set")
-		for i, m := range config.Models {
-			requireModel(!m.APIKey.IsNull(), i, "api_key", "is required")
-			requireModel(!m.AzureEndpoint.IsNull(), i, "azure_endpoint", "is required")
-			requireModel(m.FoundationModel.IsNull(), i, "foundation_model", "must not be set")
-			requireModel(m.DeploymentType.IsNull(), i, "deployment_type", "must not be set")
-			requireModel(m.Region.IsNull(), i, "region", "must not be set")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(!m.APIKey.IsNull(), name, "api_key", "is required")
+			requireModel(!m.AzureEndpoint.IsNull(), name, "azure_endpoint", "is required")
+			requireModel(m.FoundationModel.IsNull(), name, "foundation_model", "must not be set")
+			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
+			requireModel(m.Region.IsNull(), name, "region", "must not be set")
 		}
 	case "virtual-model":
 		requireAccount(config.APIKey.IsNull(), "api_key", "must not be set (virtual model groups have no credentials)")
 		requireAccount(config.AzureEndpoint.IsNull(), "azure_endpoint", "must not be set")
 		requireAccount(config.BaseURL.IsNull(), "base_url", "must not be set")
-		for i, m := range config.Models {
-			requireModel(m.Routing != nil, i, "routing", "is required")
-			requireModel(m.ModelID.IsNull(), i, "model_id", "must not be set (virtual models reference targets via routing)")
-			requireModel(m.APIVersion.IsNull(), i, "api_version", "must not be set")
-			requireModel(m.FoundationModel.IsNull(), i, "foundation_model", "must not be set")
-			requireModel(m.DeploymentType.IsNull(), i, "deployment_type", "must not be set")
-			requireModel(m.Region.IsNull(), i, "region", "must not be set")
-			requireModel(m.APIKey.IsNull(), i, "api_key", "must not be set")
-			requireModel(m.AzureEndpoint.IsNull(), i, "azure_endpoint", "must not be set")
-			requireModel(m.Cost == nil, i, "cost", "must not be set")
-			requireModel(m.AuthorizedSubjects == nil, i, "authorized_subjects", "must not be set")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(m.Routing != nil, name, "routing", "is required")
+			requireModel(m.ModelID.IsNull(), name, "model_id", "must not be set (virtual models reference targets via routing)")
+			requireModel(m.APIVersion.IsNull(), name, "api_version", "must not be set")
+			requireModel(m.FoundationModel.IsNull(), name, "foundation_model", "must not be set")
+			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
+			requireModel(m.Region.IsNull(), name, "region", "must not be set")
+			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set")
+			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set")
+			requireModel(m.Cost == nil, name, "cost", "must not be set")
+			requireModel(m.AuthorizedSubjects == nil, name, "authorized_subjects", "must not be set")
 		}
 	case "aws-bedrock":
 		requireAccount(!config.Region.IsNull(), "region", "is required")
@@ -478,12 +487,13 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 			resp.Diagnostics.AddAttributeError(path.Root("access_key_id"), "Invalid provider account configuration",
 				"`access_key_id` and `secret_access_key` must be set together.")
 		}
-		for i, m := range config.Models {
-			requireModel(m.APIVersion.IsNull(), i, "api_version", "must not be set")
-			requireModel(m.FoundationModel.IsNull(), i, "foundation_model", "must not be set")
-			requireModel(m.DeploymentType.IsNull(), i, "deployment_type", "must not be set")
-			requireModel(m.APIKey.IsNull(), i, "api_key", "must not be set")
-			requireModel(m.AzureEndpoint.IsNull(), i, "azure_endpoint", "must not be set")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(m.APIVersion.IsNull(), name, "api_version", "must not be set")
+			requireModel(m.FoundationModel.IsNull(), name, "foundation_model", "must not be set")
+			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
+			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set")
+			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set")
 		}
 	}
 
@@ -494,49 +504,51 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 	}
 
 	// Cross-type model rules: model_id, slug, routing target fields, and cost.
-	for i, m := range config.Models {
+	for _, m := range config.Models {
+		name := m.Name.ValueString()
 		if providerType != "virtual-model" {
-			requireModel(!m.ModelID.IsNull(), i, "model_id", "is required")
-			requireModel(m.Slug.IsNull(), i, "slug", "must not be set")
-			requireModel(m.Routing == nil, i, "routing", "must not be set")
+			requireModel(!m.ModelID.IsNull(), name, "model_id", "is required")
+			requireModel(m.Slug.IsNull(), name, "slug", "must not be set")
+			requireModel(m.Routing == nil, name, "routing", "must not be set")
 		}
 		if m.Cost != nil {
-			costPath := path.Root("models").AtListIndex(i).AtName("cost")
+			costPath := path.Root("models")
 			scalar := !m.Cost.Value.IsNull()
 			tokenBased := !m.Cost.Input.IsNull()
 			if scalar == tokenBased {
 				resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
-					"Exactly one of `value` (scalar metrics) or `input` (token-based metrics) must be set.")
+					fmt.Sprintf("Model %q: exactly one of `value` (scalar metrics) or `input` (token-based metrics) must be set.", name))
 			}
 			if scalar && (!m.Cost.Output.IsNull() || !m.Cost.CacheRead.IsNull() || !m.Cost.CacheWrite.IsNull()) {
 				resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
-					"`output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.")
+					fmt.Sprintf("Model %q: `output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.", name))
 			}
 		}
 		if m.Routing == nil {
 			continue
 		}
 		routingType := m.Routing.Type.ValueString()
-		for j, target := range m.Routing.Targets {
-			tPath := path.Root("models").AtListIndex(i).AtName("routing").AtName("targets").AtListIndex(j)
+		for _, target := range m.Routing.Targets {
+			tPath := path.Root("models")
+			targetName := target.Target.ValueString()
 			switch routingType {
 			case "weight-based-routing":
 				if target.Weight.IsNull() {
-					resp.Diagnostics.AddAttributeError(tPath.AtName("weight"), "Invalid routing target",
-						"`weight` is required for weight-based-routing targets.")
+					resp.Diagnostics.AddAttributeError(tPath, "Invalid routing target",
+						fmt.Sprintf("Model %q, target %q: `weight` is required for weight-based-routing targets.", name, targetName))
 				}
 				if !target.Priority.IsNull() {
-					resp.Diagnostics.AddAttributeError(tPath.AtName("priority"), "Invalid routing target",
-						"`priority` must not be set for weight-based-routing targets.")
+					resp.Diagnostics.AddAttributeError(tPath, "Invalid routing target",
+						fmt.Sprintf("Model %q, target %q: `priority` must not be set for weight-based-routing targets.", name, targetName))
 				}
 			case "priority-based-routing":
 				if target.Priority.IsNull() {
-					resp.Diagnostics.AddAttributeError(tPath.AtName("priority"), "Invalid routing target",
-						"`priority` is required for priority-based-routing targets.")
+					resp.Diagnostics.AddAttributeError(tPath, "Invalid routing target",
+						fmt.Sprintf("Model %q, target %q: `priority` is required for priority-based-routing targets.", name, targetName))
 				}
 				if !target.Weight.IsNull() {
-					resp.Diagnostics.AddAttributeError(tPath.AtName("weight"), "Invalid routing target",
-						"`weight` must not be set for priority-based-routing targets.")
+					resp.Diagnostics.AddAttributeError(tPath, "Invalid routing target",
+						fmt.Sprintf("Model %q, target %q: `weight` must not be set for priority-based-routing targets.", name, targetName))
 				}
 			}
 		}
@@ -612,7 +624,9 @@ func (r *providerAccountResource) Read(ctx context.Context, req resource.ReadReq
 
 	// Rebuild the models list, keeping configured order for entries that
 	// still exist and appending unknown remote entries in name order, so
-	// pure refreshes stay diff-free while real drift is surfaced.
+	// pure refreshes stay diff-free while real drift is surfaced. Per-model
+	// API keys fall back to the value already in state when the control
+	// plane omits them.
 	var models []modelModel
 	for _, m := range state.Models {
 		manifest, ok := remote[m.Name.ValueString()]

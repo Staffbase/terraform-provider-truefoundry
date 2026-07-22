@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -103,10 +103,10 @@ func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.Schem
 					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
 				},
 			},
-			"rules": schema.ListNestedAttribute{
+			"rules": schema.SetNestedAttribute{
 				Required:    true,
-				Description: "Budget rules. A request that matches several rules is limited by each of them.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Description: "Budget rules. A request that matches several rules is limited by each of them; order is not significant.",
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -118,12 +118,12 @@ func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.Schem
 							Required:    true,
 							Description: "Requests this rule applies to; all given conditions must match. An empty block matches every request.",
 							Attributes: map[string]schema.Attribute{
-								"subjects": schema.ListAttribute{
+								"subjects": schema.SetAttribute{
 									Optional:    true,
 									ElementType: types.StringType,
 									Description: "Calling subjects to match, as `<subject_type>:<name>` with subject type `user`, `virtualaccount`, or `team`.",
 								},
-								"models": schema.ListAttribute{
+								"models": schema.SetAttribute{
 									Optional:    true,
 									ElementType: types.StringType,
 									Description: "Model integration FQNs to match.",
@@ -146,7 +146,7 @@ func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.Schem
 								stringvalidator.OneOf(budgetUnitValues...),
 							},
 						},
-						"budget_applies_per": schema.ListAttribute{
+						"budget_applies_per": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Dimensions the budget is tracked per (each distinct value gets its own budget) instead of one shared budget, e.g. [\"user\"].",
@@ -155,16 +155,16 @@ func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.Schem
 							Optional:    true,
 							Description: "Alerting when usage crosses thresholds of the limit.",
 							Attributes: map[string]schema.Attribute{
-								"thresholds": schema.ListAttribute{
+								"thresholds": schema.SetAttribute{
 									Required:    true,
 									ElementType: types.Float64Type,
 									Description: "Usage percentages of the limit at which to alert, e.g. [50, 90].",
-									Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+									Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 								},
-								"notification_targets": schema.ListNestedAttribute{
+								"notification_targets": schema.SetNestedAttribute{
 									Required:    true,
 									Description: "Receivers of the alerts.",
-									Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+									Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 									NestedObject: schema.NestedAttributeObject{
 										Attributes: map[string]schema.Attribute{
 											"type": schema.StringAttribute{
@@ -178,12 +178,12 @@ func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.Schem
 												Required:    true,
 												Description: "FQN of the notification channel integration to send through, e.g. my-tenant:slack:slack-webhooks:notification-channel:team-ai-foundation.",
 											},
-											"to_emails": schema.ListAttribute{
+											"to_emails": schema.SetAttribute{
 												Optional:    true,
 												ElementType: types.StringType,
 												Description: "Recipient addresses (email targets only).",
 											},
-											"channels": schema.ListAttribute{
+											"channels": schema.SetAttribute{
 												Optional:    true,
 												ElementType: types.StringType,
 												Description: "Slack channels to post to (slack-bot targets only).",
@@ -231,27 +231,31 @@ func (r *gatewayBudgetConfigResource) ValidateConfig(ctx context.Context, req re
 		return
 	}
 	seen := map[string]bool{}
-	for i, rule := range config.Rules {
+	for _, rule := range config.Rules {
+		// rules is a set, so elements have no addressable index; errors are
+		// anchored at the attribute and name the offending rule in the message.
+		rulesPath := path.Root("rules")
 		if rule.ID.IsUnknown() || rule.ID.IsNull() {
 			continue
 		}
 		if seen[rule.ID.ValueString()] {
-			resp.Diagnostics.AddAttributeError(path.Root("rules").AtListIndex(i).AtName("id"),
+			resp.Diagnostics.AddAttributeError(rulesPath,
 				"Invalid budget config", fmt.Sprintf("Duplicate rule id %q.", rule.ID.ValueString()))
 		}
 		seen[rule.ID.ValueString()] = true
 		if rule.Alerts == nil {
 			continue
 		}
-		for j, t := range rule.Alerts.NotificationTargets {
-			targetPath := path.Root("rules").AtListIndex(i).AtName("alerts").AtName("notification_targets").AtListIndex(j)
+		for _, t := range rule.Alerts.NotificationTargets {
 			if t.ToEmails != nil && t.Type.ValueString() != "email" {
-				resp.Diagnostics.AddAttributeError(targetPath.AtName("to_emails"), "Invalid notification target",
-					"`to_emails` is only valid on email targets.")
+				resp.Diagnostics.AddAttributeError(rulesPath, "Invalid notification target",
+					fmt.Sprintf("Rule %q, notification channel %q: `to_emails` is only valid on email targets.",
+						rule.ID.ValueString(), t.NotificationChannel.ValueString()))
 			}
 			if t.Channels != nil && t.Type.ValueString() != "slack-bot" {
-				resp.Diagnostics.AddAttributeError(targetPath.AtName("channels"), "Invalid notification target",
-					"`channels` is only valid on slack-bot targets.")
+				resp.Diagnostics.AddAttributeError(rulesPath, "Invalid notification target",
+					fmt.Sprintf("Rule %q, notification channel %q: `channels` is only valid on slack-bot targets.",
+						rule.ID.ValueString(), t.NotificationChannel.ValueString()))
 			}
 		}
 	}

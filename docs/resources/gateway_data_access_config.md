@@ -67,7 +67,7 @@ resource "truefoundry_gateway_data_access_config" "access" {
 ### Required
 
 - `name` (String) Name of the data access config (3-32 characters, lowercase alphanumeric and hyphens).
-- `rules` (Attributes List) Data access rules; a subject sees data allowed by any matching rule. (see [below for nested schema](#nestedatt--rules))
+- `rules` (Attributes Set) Data access rules; a subject sees data allowed by any matching rule. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only
 
@@ -78,16 +78,16 @@ resource "truefoundry_gateway_data_access_config" "access" {
 
 Required:
 
-- `data_types` (List of String) Kinds of observability data covered. Elements are one of: `traces`, `metrics`.
+- `data_types` (Set of String) Kinds of observability data covered. Elements are one of: `traces`, `metrics`.
 - `id` (String) Identifier of this rule, unique within the config.
 - `scope` (String) Data the rule grants access to: `own_data` (the subject's own requests), `team_data` (requests of the subject's teams), or `all_data`. One of: `own_data`, `team_data`, `all_data`.
-- `subjects` (List of String) Subjects the rule applies to, as `<subject_type>:<name>` FQNs, e.g. team:everyone or role:tenant-admin.
+- `subjects` (Set of String) Subjects the rule applies to, as `<subject_type>:<name>` FQNs, e.g. team:everyone or role:tenant-admin.
 
 Optional:
 
 - `description` (String) Human-readable description of the rule.
 - `enabled` (Boolean) Whether the rule is active.
-- `filters` (Attributes List) Narrows an `all_data` rule to matching requests; not allowed on other scopes. Omit the attribute (rather than an empty list) for an unfiltered rule. (see [below for nested schema](#nestedatt--rules--filters))
+- `filters` (Attributes Set) Narrows an `all_data` rule to matching requests; not allowed on other scopes. Omit the attribute (rather than an empty set) for an unfiltered rule. (see [below for nested schema](#nestedatt--rules--filters))
 
 <a id="nestedatt--rules--filters"></a>
 ### Nested Schema for `rules.filters`
@@ -95,7 +95,7 @@ Optional:
 Required:
 
 - `field` (String) Request property to filter on. One of: `metadata`, `created_by`.
-- `values` (List of String) Values to match against (IN semantics).
+- `values` (Set of String) Values to match against (IN semantics).
 
 Optional:
 

@@ -99,7 +99,7 @@ Required:
 - `enabled` (Boolean) Whether the destination is active.
 - `name` (String) Name identifying this destination, unique within the config.
 - `storage` (Attributes) Where the data is stored. (see [below for nested schema](#nestedatt--destinations--storage))
-- `when` (Attributes List) Conditions a request must match (all of them) to be routed here. (see [below for nested schema](#nestedatt--destinations--when))
+- `when` (Attributes Set) Conditions a request must match (all of them) to be routed here. (see [below for nested schema](#nestedatt--destinations--when))
 
 Optional:
 
@@ -125,7 +125,7 @@ Optional:
 Required:
 
 - `field` (String) Request property to match. One of: `metadata`, `created_by`.
-- `values` (List of String) Values to match against (IN semantics).
+- `values` (Set of String) Values to match against (IN semantics).
 
 Optional:
 

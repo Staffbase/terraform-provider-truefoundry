@@ -46,9 +46,10 @@ func TestAccGatewayGlobalSettings_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_global_settings.settings", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_global_settings.settings", "retry_settings.attempts", "3"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_global_settings.settings", "retry_settings.on_status_codes.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_global_settings.settings", "retry_settings.on_status_codes.0", "429"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_global_settings.settings", "retry_settings.on_status_codes.*", "429"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_global_settings.settings", "retry_settings.on_status_codes.*", "503"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_global_settings.settings", "logging_settings.log_body_by_default", "false"),
-					// The empty allowlist must survive as an empty (non-null) list.
+					// The empty allowlist must survive as an empty (non-null) set.
 					resource.TestCheckResourceAttr("truefoundry_gateway_global_settings.settings", "model_configuration.allowed_models.#", "0"),
 					resource.TestCheckNoResourceAttr("truefoundry_gateway_global_settings.settings", "semantic_cache_settings"),
 					resource.TestCheckNoResourceAttr("truefoundry_gateway_global_settings.settings", "guardrail_settings"),

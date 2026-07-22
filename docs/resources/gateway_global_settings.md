@@ -90,7 +90,7 @@ Optional:
 
 Required:
 
-- `allowed_models` (List of String) Models the gateway is allowed to serve. An empty list allows no models; omit the whole `model_configuration` block to allow all.
+- `allowed_models` (Set of String) Models the gateway is allowed to serve. An empty set allows no models; omit the whole `model_configuration` block to allow all.
 
 
 <a id="nestedatt--retry_settings"></a>
@@ -103,7 +103,7 @@ Required:
 Optional:
 
 - `delay` (Number) Delay between retry attempts in milliseconds.
-- `on_status_codes` (List of String) HTTP status codes that trigger a retry, e.g. ["429", "503"]. Omit the attribute (rather than an empty list) to retry on the platform's default codes.
+- `on_status_codes` (Set of String) HTTP status codes that trigger a retry, e.g. ["429", "503"]. Omit the attribute (rather than an empty set) to retry on the platform's default codes.
 
 
 <a id="nestedatt--semantic_cache_settings"></a>

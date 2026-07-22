@@ -53,10 +53,20 @@ resource "truefoundry_provider_account" "virtual" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "fqn", mockcp.Tenant+":virtual-model:spike-virtual"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.routing.type", "weight-based-routing"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.routing.targets.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.routing.targets.1.weight", "3"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.routing.targets.0.metadata_match.tfy_gateway_cluster", "cluster-a"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*", map[string]string{
+						"name":              "gpt-5-mini",
+						"routing.type":      "weight-based-routing",
+						"routing.targets.#": "2",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*.routing.targets.*", map[string]string{
+						"target": "spike-azure-sc/gpt-5-mini",
+						"weight": "3",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*.routing.targets.*", map[string]string{
+						"target":                             "spike-azure-fc/gpt-5-mini",
+						"weight":                             "1",
+						"metadata_match.tfy_gateway_cluster": "cluster-a",
+					}),
 				),
 			},
 			// In-place update: shift weights, add a slug, and add a
@@ -106,13 +116,82 @@ resource "truefoundry_provider_account" "virtual" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.slug", "gpt-5-mini-lb"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.0.routing.targets.0.weight", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.1.routing.type", "priority-based-routing"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.1.routing.targets.0.priority", "0"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.1.routing.targets.0.fallback_status_codes.0", "429"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.virtual", "models.1.routing.targets.1.fallback_candidate", "true"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*", map[string]string{
+						"name":              "gpt-5-mini",
+						"slug":              "gpt-5-mini-lb",
+						"routing.type":      "weight-based-routing",
+						"routing.targets.#": "1",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*.routing.targets.*", map[string]string{
+						"target": "spike-azure-fc/gpt-5-mini",
+						"weight": "2",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*", map[string]string{
+						"name":              "claude-failover",
+						"routing.type":      "priority-based-routing",
+						"routing.targets.#": "2",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*.routing.targets.*", map[string]string{
+						"target":                  "spike-claude-sweden/claude-sonnet-5",
+						"priority":                "0",
+						"fallback_status_codes.#": "2",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.virtual", "models.*.routing.targets.*.fallback_status_codes.*", "429"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.virtual", "models.*.routing.targets.*.fallback_status_codes.*", "500"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.virtual", "models.*.routing.targets.*", map[string]string{
+						"target":             "spike-bedrock/claude-sonnet-5",
+						"priority":           "1",
+						"fallback_candidate": "true",
+					}),
 				),
+			},
+			// Regression: listing the same models, targets, model_types, and
+			// fallback_status_codes in a different order is a pure set
+			// reordering and must produce an empty plan.
+			{
+				PlanOnly: true,
+				Config: providerConfig(host) + `
+resource "truefoundry_provider_account" "virtual" {
+  name          = "spike-virtual"
+  provider_type = "virtual-model"
+  models = [
+    {
+      name        = "claude-failover"
+      model_types = ["chat"]
+      routing = {
+        type = "priority-based-routing"
+        targets = [
+          {
+            target             = "spike-bedrock/claude-sonnet-5"
+            priority           = 1
+            fallback_candidate = true
+          },
+          {
+            target                = "spike-claude-sweden/claude-sonnet-5"
+            priority              = 0
+            fallback_status_codes = ["500", "429"]
+          },
+        ]
+      }
+    },
+    {
+      name        = "gpt-5-mini"
+      slug        = "gpt-5-mini-lb"
+      model_types = ["completion", "chat"]
+      routing = {
+        type = "weight-based-routing"
+        targets = [
+          {
+            target         = "spike-azure-fc/gpt-5-mini"
+            weight         = 2
+            metadata_match = { tfy_gateway_cluster = "cluster-a" }
+          },
+        ]
+      }
+    },
+  ]
+}
+`,
 			},
 		},
 	})
@@ -179,7 +258,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("routing` is required"),
+			want: regexp.MustCompile("`routing` of model \"gpt-5-mini\" is required"),
 		},
 		{
 			name: "model_id on virtual model",
@@ -200,7 +279,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("model_id` must not be set"),
+			want: regexp.MustCompile("`model_id` of model \"gpt-5-mini\" must not be set"),
 		},
 		{
 			name: "priority on weight-based target",
@@ -220,7 +299,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("priority` must not be set"),
+			want: regexp.MustCompile("Model \"gpt-5-mini\", target \"acc/model\": `priority` must not be set"),
 		},
 		{
 			name: "weight missing on weight-based target",
@@ -240,7 +319,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("weight` is required"),
+			want: regexp.MustCompile("Model \"gpt-5-mini\", target \"acc/model\": `weight` is required"),
 		},
 		{
 			name: "routing on openai model",
@@ -261,7 +340,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("routing` must not be set"),
+			want: regexp.MustCompile("`routing` of model \"gpt-4o\" must not be set"),
 		},
 	}
 	for _, tc := range cases {

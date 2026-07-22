@@ -49,7 +49,7 @@ output "ci_bot_token" {
 ### Required
 
 - `name` (String) Name of the virtual account. Changing it replaces the account (and its token).
-- `permissions` (Attributes List) Roles granted to this virtual account on specific resources. (see [below for nested schema](#nestedatt--permissions))
+- `permissions` (Attributes Set) Roles granted to this virtual account on specific resources. (see [below for nested schema](#nestedatt--permissions))
 
 ### Optional
 

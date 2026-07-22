@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -106,11 +106,11 @@ func (r *gatewayGlobalSettingsResource) Schema(_ context.Context, _ resource.Sch
 						Optional:    true,
 						Description: "Delay between retry attempts in milliseconds.",
 					},
-					"on_status_codes": schema.ListAttribute{
+					"on_status_codes": schema.SetAttribute{
 						Optional:    true,
 						ElementType: types.StringType,
-						Description: "HTTP status codes that trigger a retry, e.g. [\"429\", \"503\"]. Omit the attribute (rather than an empty list) to retry on the platform's default codes.",
-						Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+						Description: "HTTP status codes that trigger a retry, e.g. [\"429\", \"503\"]. Omit the attribute (rather than an empty set) to retry on the platform's default codes.",
+						Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 					},
 				},
 			},
@@ -160,10 +160,10 @@ func (r *gatewayGlobalSettingsResource) Schema(_ context.Context, _ resource.Sch
 				Optional:    true,
 				Description: "Restrictions on the models the gateway serves.",
 				Attributes: map[string]schema.Attribute{
-					"allowed_models": schema.ListAttribute{
+					"allowed_models": schema.SetAttribute{
 						Required:    true,
 						ElementType: types.StringType,
-						Description: "Models the gateway is allowed to serve. An empty list allows no models; omit the whole `model_configuration` block to allow all.",
+						Description: "Models the gateway is allowed to serve. An empty set allows no models; omit the whole `model_configuration` block to allow all.",
 					},
 				},
 			},

@@ -48,7 +48,10 @@ func TestAccProviderAccount_bedrockLifecycle(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "fqn", mockcp.Tenant+":aws-bedrock:spike-bedrock"),
 					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "region", "eu-central-1"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "models.0.model_id", "cohere.rerank-v3-5:0"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.bedrock", "models.*", map[string]string{
+						"name":     "cohere-rerank-v3-5",
+						"model_id": "cohere.rerank-v3-5:0",
+					}),
 				),
 			},
 			// In-place update: add a Claude inference profile with a
@@ -84,8 +87,14 @@ resource "truefoundry_provider_account" "bedrock" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "models.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "models.1.region", "eu-west-1"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.bedrock", "models.1.cost.output", "0.015"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.bedrock", "models.*", map[string]string{
+						"name":        "claude-sonnet",
+						"model_id":    "eu.anthropic.claude-sonnet-5-20260203-v1:0",
+						"region":      "eu-west-1",
+						"cost.metric": "per_1000_tokens",
+						"cost.input":  "0.003",
+						"cost.output": "0.015",
+					}),
 				),
 			},
 		},

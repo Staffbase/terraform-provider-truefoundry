@@ -33,7 +33,7 @@ resource "truefoundry_system_secret_store" "system" {
 ### Required
 
 - `name` (String) Name of the TrueFoundry account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
-- `secret_stores` (Attributes List) DB-backed secret stores in this account. (see [below for nested schema](#nestedatt--secret_stores))
+- `secret_stores` (Attributes Set) DB-backed secret stores in this account. (see [below for nested schema](#nestedatt--secret_stores))
 
 ### Read-Only
 
@@ -49,7 +49,7 @@ Required:
 
 Optional:
 
-- `authorized_subjects` (List of String) Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.
 
 ## Import
 

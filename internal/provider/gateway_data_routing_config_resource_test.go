@@ -62,6 +62,12 @@ func TestAccGatewayDataRoutingConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "default.storage.type", "controlplane-managed"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.#", "1"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.storage.storage_integration_fqn", "tenant:azure:blobstorage:blob-storage:devde1truefoundrydevelop"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*", map[string]string{
+						"field":    "metadata",
+						"key":      "tfy_gateway_cluster",
+						"values.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*.values.*", "devde1truefoundrydevelop"),
 				),
 			},
 			// In-place update: pinned default region with retention, no

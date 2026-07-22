@@ -87,9 +87,10 @@ func (r *azureAccountResource) Schema(_ context.Context, _ resource.SchemaReques
 				Description: "Azure subscription ID the account belongs to.",
 			},
 			"blob_storages": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "Azure Blob Storage containers accessible through this account.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Required:      true,
+				Description:   "Azure Blob Storage containers accessible through this account.",
+				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -109,7 +110,7 @@ func (r *azureAccountResource) Schema(_ context.Context, _ resource.SchemaReques
 							Description: "Azure storage connection string. Accepts TrueFoundry secret references (recommended); the control plane returns it as stored, so drift is detected. " +
 								"The control plane verifies credentials at apply time — omitting the connection string only works if the control plane itself has an Azure identity with access to the storage.",
 						},
-						"authorized_subjects": schema.ListAttribute{
+						"authorized_subjects": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Subjects allowed to use this blob storage, as `<user_type>:<username>` FQNs.",
@@ -183,6 +184,9 @@ func (r *azureAccountResource) Read(ctx context.Context, req resource.ReadReques
 		state.SubscriptionID = stringOrNull(account.Manifest.SubscriptionID)
 	}
 
+	// Rebuild the list keeping configured order for entries that still exist
+	// and appending unknown remote entries in name order, so pure refreshes
+	// stay diff-free while real drift is surfaced.
 	var storages []blobStorageModel
 	for _, s := range state.BlobStorages {
 		manifest, ok := remote[s.Name.ValueString()]

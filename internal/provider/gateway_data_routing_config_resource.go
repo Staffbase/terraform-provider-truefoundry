@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -157,10 +158,10 @@ func (r *gatewayDataRoutingConfigResource) Schema(_ context.Context, _ resource.
 							Optional:    true,
 							Description: "Human-readable description of the destination.",
 						},
-						"when": schema.ListNestedAttribute{
+						"when": schema.SetNestedAttribute{
 							Required:    true,
 							Description: "Conditions a request must match (all of them) to be routed here.",
-							Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+							Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"field": schema.StringAttribute{
@@ -174,11 +175,11 @@ func (r *gatewayDataRoutingConfigResource) Schema(_ context.Context, _ resource.
 										Optional:    true,
 										Description: "Metadata key to match (required for `metadata` conditions, not allowed otherwise).",
 									},
-									"values": schema.ListAttribute{
+									"values": schema.SetAttribute{
 										Required:    true,
 										ElementType: types.StringType,
 										Description: "Values to match against (IN semantics).",
-										Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+										Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 									},
 								},
 							},
@@ -256,21 +257,23 @@ func (r *gatewayDataRoutingConfigResource) ValidateConfig(ctx context.Context, r
 			seen[dest.Name.ValueString()] = true
 		}
 		validateStorage(dest.Storage, destPath.AtName("storage"))
-		for j, c := range dest.When {
+		// when is a set, so conditions have no addressable index; errors are
+		// anchored at the attribute and name the condition in the message.
+		for _, c := range dest.When {
 			if c.Field.IsUnknown() {
 				continue
 			}
-			keyPath := destPath.AtName("when").AtListIndex(j).AtName("key")
+			whenPath := destPath.AtName("when")
 			switch c.Field.ValueString() {
 			case "metadata":
 				if c.Key.IsNull() {
-					resp.Diagnostics.AddAttributeError(keyPath, "Invalid routing condition",
+					resp.Diagnostics.AddAttributeError(whenPath, "Invalid routing condition",
 						"`key` is required on metadata conditions.")
 				}
 			default:
 				if !c.Key.IsNull() {
-					resp.Diagnostics.AddAttributeError(keyPath, "Invalid routing condition",
-						"`key` is only valid on metadata conditions.")
+					resp.Diagnostics.AddAttributeError(whenPath, "Invalid routing condition",
+						fmt.Sprintf("`key` is only valid on metadata conditions, not on %q conditions.", c.Field.ValueString()))
 				}
 			}
 		}

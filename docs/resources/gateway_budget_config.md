@@ -62,7 +62,7 @@ resource "truefoundry_gateway_budget_config" "budget" {
 ### Required
 
 - `name` (String) Name of the budget config (3-32 characters, lowercase alphanumeric and hyphens).
-- `rules` (Attributes List) Budget rules. A request that matches several rules is limited by each of them. (see [below for nested schema](#nestedatt--rules))
+- `rules` (Attributes Set) Budget rules. A request that matches several rules is limited by each of them; order is not significant. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only
 
@@ -82,7 +82,7 @@ Optional:
 
 - `alerts` (Attributes) Alerting when usage crosses thresholds of the limit. (see [below for nested schema](#nestedatt--rules--alerts))
 - `audit_mode` (Boolean) Only record violations instead of blocking requests over the limit.
-- `budget_applies_per` (List of String) Dimensions the budget is tracked per (each distinct value gets its own budget) instead of one shared budget, e.g. ["user"].
+- `budget_applies_per` (Set of String) Dimensions the budget is tracked per (each distinct value gets its own budget) instead of one shared budget, e.g. ["user"].
 
 <a id="nestedatt--rules--when"></a>
 ### Nested Schema for `rules.when`
@@ -90,8 +90,8 @@ Optional:
 Optional:
 
 - `metadata` (Map of String) Request metadata key-value pairs to match, e.g. {tfy_gateway_cluster = "..."}.
-- `models` (List of String) Model integration FQNs to match.
-- `subjects` (List of String) Calling subjects to match, as `<subject_type>:<name>` with subject type `user`, `virtualaccount`, or `team`.
+- `models` (Set of String) Model integration FQNs to match.
+- `subjects` (Set of String) Calling subjects to match, as `<subject_type>:<name>` with subject type `user`, `virtualaccount`, or `team`.
 
 
 <a id="nestedatt--rules--alerts"></a>
@@ -99,8 +99,8 @@ Optional:
 
 Required:
 
-- `notification_targets` (Attributes List) Receivers of the alerts. (see [below for nested schema](#nestedatt--rules--alerts--notification_targets))
-- `thresholds` (List of Number) Usage percentages of the limit at which to alert, e.g. [50, 90].
+- `notification_targets` (Attributes Set) Receivers of the alerts. (see [below for nested schema](#nestedatt--rules--alerts--notification_targets))
+- `thresholds` (Set of Number) Usage percentages of the limit at which to alert, e.g. [50, 90].
 
 <a id="nestedatt--rules--alerts--notification_targets"></a>
 ### Nested Schema for `rules.alerts.notification_targets`
@@ -112,8 +112,8 @@ Required:
 
 Optional:
 
-- `channels` (List of String) Slack channels to post to (slack-bot targets only).
-- `to_emails` (List of String) Recipient addresses (email targets only).
+- `channels` (Set of String) Slack channels to post to (slack-bot targets only).
+- `to_emails` (Set of String) Recipient addresses (email targets only).
 
 ## Import
 

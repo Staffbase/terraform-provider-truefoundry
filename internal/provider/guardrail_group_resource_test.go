@@ -67,11 +67,20 @@ func TestAccGuardrailGroup_lifecycle(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "fqn", mockcp.Tenant+":guardrail-config-group:spike-gr-francecentral"),
 					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.type", "azure-content-safety"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.severity_threshold", "4"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.categories.#", "4"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.1.type", "azure-prompt-shield"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "collaborators.0.role_id", "provider-account-manager"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_guardrail_group.region", "guardrails.*", map[string]string{
+						"name":               "spike-cs-francecentral",
+						"type":               "azure-content-safety",
+						"severity_threshold": "4",
+						"categories.#":       "4",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_guardrail_group.region", "guardrails.*", map[string]string{
+						"name": "spike-ps-francecentral",
+						"type": "azure-prompt-shield",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_guardrail_group.region", "collaborators.*", map[string]string{
+						"subject": "user:falk@staffbase.com",
+						"role_id": "provider-account-manager",
+					}),
 				),
 			},
 			// In-place update: stricter threshold, audit strategy, blocklist.
@@ -97,9 +106,13 @@ resource "truefoundry_guardrail_group" "region" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.enforcing_strategy", "audit"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.severity_threshold", "2"),
-					resource.TestCheckResourceAttr("truefoundry_guardrail_group.region", "guardrails.0.blocklist_names.0", "internal-terms"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_guardrail_group.region", "guardrails.*", map[string]string{
+						"name":               "spike-cs-francecentral",
+						"enforcing_strategy": "audit",
+						"severity_threshold": "2",
+						"blocklist_names.#":  "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_guardrail_group.region", "guardrails.*.blocklist_names.*", "internal-terms"),
 					func(*terraform.State) error {
 						if n := mock.AccountCount(); n != 1 {
 							return fmt.Errorf("control plane has %d accounts, want 1", n)
@@ -154,7 +167,7 @@ resource "truefoundry_guardrail_group" "bad" {
       api_version        = "2024-09-01"
       categories         = ["Hate"]
     }`,
-			want: regexp.MustCompile("severity_threshold` is required"),
+			want: regexp.MustCompile("`severity_threshold` of guardrail \"cs\" is required"),
 		},
 		{
 			name: "prompt shield with categories",
@@ -167,7 +180,7 @@ resource "truefoundry_guardrail_group" "bad" {
       api_version        = "2024-09-01"
       categories         = ["Hate"]
     }`,
-			want: regexp.MustCompile("categories` must not be set"),
+			want: regexp.MustCompile("`categories` of guardrail \"ps\" must not be set"),
 		},
 		{
 			name: "invalid enforcing strategy",

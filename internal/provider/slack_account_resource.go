@@ -61,7 +61,7 @@ func (r *slackAccountResource) Metadata(_ context.Context, req resource.Metadata
 }
 
 func (r *slackAccountResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
-	authorizedSubjects := schema.ListAttribute{
+	authorizedSubjects := schema.SetAttribute{
 		Optional:    true,
 		ElementType: types.StringType,
 		Description: "Subjects allowed to use this notification channel, as `<user_type>:<username>` FQNs.",
@@ -91,8 +91,9 @@ func (r *slackAccountResource) Schema(_ context.Context, _ resource.SchemaReques
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"webhooks": schema.ListNestedAttribute{
-				Optional:    true,
-				Description: "Slack incoming webhook notification channels. At least one webhook or bot is required.",
+				Optional:      true,
+				Description:   "Slack incoming webhook notification channels. At least one webhook or bot is required.",
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -110,8 +111,9 @@ func (r *slackAccountResource) Schema(_ context.Context, _ resource.SchemaReques
 				},
 			},
 			"bots": schema.ListNestedAttribute{
-				Optional:    true,
-				Description: "Slack bot notification channels. At least one webhook or bot is required.",
+				Optional:      true,
+				Description:   "Slack bot notification channels. At least one webhook or bot is required.",
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -216,13 +218,6 @@ func (r *slackAccountResource) Read(ctx context.Context, req resource.ReadReques
 	}
 
 	// Keep the configured order, append unknown channels sorted by name.
-	known := map[string]bool{}
-	for _, w := range state.Webhooks {
-		known[w.Name.ValueString()] = true
-	}
-	for _, b := range state.Bots {
-		known[b.Name.ValueString()] = true
-	}
 	var webhooks []slackWebhookModel
 	var bots []slackBotModel
 	appendChannel := func(manifest client.SlackNotificationChannel) {

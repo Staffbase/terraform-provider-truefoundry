@@ -40,7 +40,10 @@ resource "truefoundry_virtual_account" "ci" {
 					resource.TestCheckResourceAttrSet("truefoundry_virtual_account.ci", "id"),
 					resource.TestCheckResourceAttrSet("truefoundry_virtual_account.ci", "token"),
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "permissions.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "permissions.0.role_id", "provider-account-access"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_virtual_account.ci", "permissions.*", map[string]string{
+						"resource_fqn": "mock-tenant:azure-openai:spike-azure",
+						"role_id":      "provider-account-access",
+					}),
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "tags.env", "dev"),
 				),
 			},

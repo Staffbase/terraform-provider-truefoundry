@@ -73,9 +73,20 @@ func TestAccCustomEndpointAccount_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "fqn", mockcp.Tenant+":custom-endpoint:spike-azure-speech"),
 					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "routing_type", "weight"),
 					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.0.loadbalancing.weight", "50"),
-					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.1.loadbalancing.metadata_match.tfy_gateway_cluster", "cluster-a"),
-					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "collaborators.0.subject", "team:everyone"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_custom_endpoint_account.speech", "endpoints.*", map[string]string{
+						"name":                                  "francecentral",
+						"loadbalancing.weight":                  "50",
+						"loadbalancing.fallback_status_codes.#": "3",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_custom_endpoint_account.speech", "endpoints.*.loadbalancing.fallback_status_codes.*", "429"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_custom_endpoint_account.speech", "endpoints.*", map[string]string{
+						"name": "swedencentral",
+						"loadbalancing.metadata_match.tfy_gateway_cluster": "cluster-a",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_custom_endpoint_account.speech", "collaborators.*", map[string]string{
+						"subject": "team:everyone",
+						"role_id": "provider-account-access",
+					}),
 				),
 			},
 			// In-place update: drop load balancing entirely, single endpoint
@@ -104,8 +115,13 @@ resource "truefoundry_custom_endpoint_account" "speech" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.0.headers.X-Custom-Header", "value"),
-					resource.TestCheckResourceAttr("truefoundry_custom_endpoint_account.speech", "endpoints.0.tls.reject_unauthorized", "true"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_custom_endpoint_account.speech", "endpoints.*", map[string]string{
+						"name":                    "docintel",
+						"headers.X-Custom-Header": "value",
+						"tls.reject_unauthorized": "true",
+						"authorized_subjects.#":   "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_custom_endpoint_account.speech", "endpoints.*.authorized_subjects.*", "user:falk@staffbase.com"),
 					resource.TestCheckNoResourceAttr("truefoundry_custom_endpoint_account.speech", "routing_type"),
 				),
 			},

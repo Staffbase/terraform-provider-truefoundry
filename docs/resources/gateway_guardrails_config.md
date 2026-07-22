@@ -62,7 +62,7 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
 ### Required
 
 - `name` (String) Name of the guardrails config (3-32 characters, lowercase alphanumeric and hyphens).
-- `rules` (Attributes List) Guardrails rules. Every matching rule's guardrails run on a request. (see [below for nested schema](#nestedatt--rules))
+- `rules` (Attributes Set) Guardrails rules. Every matching rule's guardrails run on a request; order is not significant. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only
 
@@ -102,8 +102,8 @@ Required:
 
 Optional:
 
-- `in` (List of String) Subject FQNs to match.
-- `not_in` (List of String) Subject FQNs to exclude.
+- `in` (Set of String) Subject FQNs to match.
+- `not_in` (Set of String) Subject FQNs to exclude.
 
 
 <a id="nestedatt--rules--when--target"></a>
@@ -121,7 +121,7 @@ Optional:
 Required:
 
 - `condition` (String) Match semantics. One of: `in`, `not_in`.
-- `values` (List of String) Values to match against.
+- `values` (Set of String) Values to match against.
 
 
 <a id="nestedatt--rules--when--target--mcp_tools"></a>
@@ -130,7 +130,7 @@ Required:
 Required:
 
 - `condition` (String) Match semantics. One of: `in`, `not_in`.
-- `values` (Attributes List) MCP servers and their covered tools. (see [below for nested schema](#nestedatt--rules--when--target--mcp_tools--values))
+- `values` (Attributes Set) MCP servers and their covered tools. (see [below for nested schema](#nestedatt--rules--when--target--mcp_tools--values))
 
 <a id="nestedatt--rules--when--target--mcp_tools--values"></a>
 ### Nested Schema for `rules.when.target.mcp_tools.values`
@@ -142,7 +142,7 @@ Required:
 
 Optional:
 
-- `enabled_tools` (List of String) Specific tools covered when `enable_all_tools` is false.
+- `enabled_tools` (Set of String) Specific tools covered when `enable_all_tools` is false.
 
 
 
@@ -152,7 +152,7 @@ Optional:
 Required:
 
 - `condition` (String) Match semantics. One of: `in`, `not_in`.
-- `values` (List of String) Values to match against.
+- `values` (Set of String) Values to match against.
 
 ## Import
 

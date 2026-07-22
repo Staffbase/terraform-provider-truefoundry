@@ -62,7 +62,7 @@ Required:
 
 Optional:
 
-- `authorized_subjects` (List of String) Subjects allowed to use this notification channel, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to use this notification channel, as `<user_type>:<username>` FQNs.
 
 
 <a id="nestedatt--webhooks"></a>
@@ -75,7 +75,7 @@ Required:
 
 Optional:
 
-- `authorized_subjects` (List of String) Subjects allowed to use this notification channel, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to use this notification channel, as `<user_type>:<username>` FQNs.
 
 ## Import
 
