@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -118,11 +119,11 @@ func inNotInSchema(description string) schema.SingleNestedAttribute {
 					stringvalidator.OneOf(inNotInValues...),
 				},
 			},
-			"values": schema.ListAttribute{
+			"values": schema.SetAttribute{
 				Required:    true,
 				ElementType: types.StringType,
 				Description: "Values to match against.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 			},
 		},
 	}
@@ -149,10 +150,10 @@ func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.S
 					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
 				},
 			},
-			"rules": schema.ListNestedAttribute{
+			"rules": schema.SetNestedAttribute{
 				Required:    true,
-				Description: "Guardrails rules. Every matching rule's guardrails run on a request.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Description: "Guardrails rules. Every matching rule's guardrails run on a request; order is not significant.",
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -181,10 +182,10 @@ func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.S
 														stringvalidator.OneOf(inNotInValues...),
 													},
 												},
-												"values": schema.ListNestedAttribute{
+												"values": schema.SetNestedAttribute{
 													Required:    true,
 													Description: "MCP servers and their covered tools.",
-													Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+													Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 													NestedObject: schema.NestedAttributeObject{
 														Attributes: map[string]schema.Attribute{
 															"name": schema.StringAttribute{
@@ -195,7 +196,7 @@ func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.S
 																Required:    true,
 																Description: "Whether all tools of the server are covered.",
 															},
-															"enabled_tools": schema.ListAttribute{
+															"enabled_tools": schema.SetAttribute{
 																Optional:    true,
 																ElementType: types.StringType,
 																Description: "Specific tools covered when `enable_all_tools` is false.",
@@ -218,12 +219,12 @@ func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.S
 												stringvalidator.OneOf("and", "or"),
 											},
 										},
-										"in": schema.ListAttribute{
+										"in": schema.SetAttribute{
 											Optional:    true,
 											ElementType: types.StringType,
 											Description: "Subject FQNs to match.",
 										},
-										"not_in": schema.ListAttribute{
+										"not_in": schema.SetAttribute{
 											Optional:    true,
 											ElementType: types.StringType,
 											Description: "Subject FQNs to exclude.",
@@ -279,11 +280,13 @@ func (r *gatewayGuardrailsConfigResource) ValidateConfig(ctx context.Context, re
 		return
 	}
 	seen := map[string]bool{}
-	for i, rule := range config.Rules {
-		rulePath := path.Root("rules").AtListIndex(i)
+	for _, rule := range config.Rules {
+		// rules is a set, so elements have no addressable index; errors are
+		// anchored at the attribute and name the offending rule in the message.
+		rulesPath := path.Root("rules")
 		if !rule.ID.IsUnknown() && !rule.ID.IsNull() {
 			if seen[rule.ID.ValueString()] {
-				resp.Diagnostics.AddAttributeError(rulePath.AtName("id"),
+				resp.Diagnostics.AddAttributeError(rulesPath,
 					"Invalid guardrails config", fmt.Sprintf("Duplicate rule id %q.", rule.ID.ValueString()))
 			}
 			seen[rule.ID.ValueString()] = true
@@ -292,12 +295,12 @@ func (r *gatewayGuardrailsConfigResource) ValidateConfig(ctx context.Context, re
 			continue
 		}
 		if t := rule.When.Target; t != nil && t.Model == nil && t.MCPServers == nil && t.MCPTools == nil {
-			resp.Diagnostics.AddAttributeError(rulePath.AtName("when").AtName("target"), "Invalid guardrails rule",
-				"`target` needs at least one of `model`, `mcp_servers`, `mcp_tools`.")
+			resp.Diagnostics.AddAttributeError(rulesPath, "Invalid guardrails rule",
+				fmt.Sprintf("Rule %q: `target` needs at least one of `model`, `mcp_servers`, `mcp_tools`.", rule.ID.ValueString()))
 		}
 		if s := rule.When.Subjects; s != nil && s.In == nil && s.NotIn == nil {
-			resp.Diagnostics.AddAttributeError(rulePath.AtName("when").AtName("subjects"), "Invalid guardrails rule",
-				"`subjects` needs at least one of `in`, `not_in`.")
+			resp.Diagnostics.AddAttributeError(rulesPath, "Invalid guardrails rule",
+				fmt.Sprintf("Rule %q: `subjects` needs at least one of `in`, `not_in`.", rule.ID.ValueString()))
 		}
 	}
 }

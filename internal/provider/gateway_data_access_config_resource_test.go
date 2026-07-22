@@ -58,8 +58,17 @@ func TestAccGatewayDataAccessConfig_lifecycle(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_data_access_config.access", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.#", "3"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.0.scope", "own_data"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.2.subjects.0", "role:tenant-admin"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*", map[string]string{
+						"id":          "default-everyone-own-data",
+						"scope":       "own_data",
+						"description": "Users can access their own data",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*", map[string]string{
+						"id":         "default-tenant-admin-all-data",
+						"scope":      "all_data",
+						"subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_access_config.access", "rules.*.subjects.*", "role:tenant-admin"),
 				),
 			},
 			// In-place update: filtered all_data rule, disabled rule.
@@ -98,10 +107,24 @@ resource "truefoundry_gateway_data_access_config" "access" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.0.enabled", "false"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.1.filters.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_access_config.access", "rules.1.filters.0.key", "tfy_gateway_cluster"),
-					resource.TestCheckNoResourceAttr("truefoundry_gateway_data_access_config.access", "rules.1.filters.1.key"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*", map[string]string{
+						"id":      "default-everyone-own-data",
+						"enabled": "false",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*", map[string]string{
+						"id":        "cluster-scoped-all-data",
+						"filters.#": "2",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*.filters.*", map[string]string{
+						"field": "metadata",
+						"key":   "tfy_gateway_cluster",
+					}),
+					// The created_by filter carries no key; identified by its value.
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_access_config.access", "rules.*.filters.*", map[string]string{
+						"field":    "created_by",
+						"values.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_access_config.access", "rules.*.filters.*.values.*", "virtualaccount:continuous-delivery"),
 				),
 			},
 		},

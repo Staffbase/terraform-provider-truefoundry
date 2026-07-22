@@ -8,6 +8,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -106,7 +107,7 @@ func (r *guardrailGroupResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"collaborators": schema.ListNestedAttribute{
+			"collaborators": schema.SetNestedAttribute{
 				Optional:    true,
 				Description: "Subjects with a role on this guardrail config group.",
 				NestedObject: schema.NestedAttributeObject{
@@ -123,9 +124,10 @@ func (r *guardrailGroupResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 			},
 			"guardrails": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "Guardrail configs in this group.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Required:      true,
+				Description:   "Guardrail configs in this group.",
+				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"type": schema.StringAttribute{
@@ -182,18 +184,18 @@ func (r *guardrailGroupResource) Schema(_ context.Context, _ resource.SchemaRequ
 								int64validator.Between(0, 6),
 							},
 						},
-						"categories": schema.ListAttribute{
+						"categories": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: fmt.Sprintf("Harm categories to detect. One or more of: `%s`. "+
 								"Required for `azure-content-safety`, must be unset for `azure-prompt-shield`.",
 								strings.Join(contentSafetyCategories, "`, `")),
-							Validators: []validator.List{
-								listvalidator.SizeAtLeast(1),
-								listvalidator.ValueStringsAre(stringvalidator.OneOf(contentSafetyCategories...)),
+							Validators: []validator.Set{
+								setvalidator.SizeAtLeast(1),
+								setvalidator.ValueStringsAre(stringvalidator.OneOf(contentSafetyCategories...)),
 							},
 						},
-						"blocklist_names": schema.ListAttribute{
+						"blocklist_names": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Custom Azure Content Safety blocklists to check text against (`azure-content-safety` only).",
@@ -231,11 +233,12 @@ func (r *guardrailGroupResource) ValidateConfig(ctx context.Context, req resourc
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	for i, g := range config.Guardrails {
-		gPath := path.Root("guardrails").AtListIndex(i)
+	// guardrails is a set, so elements have no addressable index; errors are
+	// anchored at the attribute and name the offending guardrail in the message.
+	for _, g := range config.Guardrails {
 		fail := func(attr, why string) {
-			resp.Diagnostics.AddAttributeError(gPath.AtName(attr), "Invalid guardrail configuration",
-				fmt.Sprintf("`guardrails[%d].%s` %s for type %q.", i, attr, why, g.Type.ValueString()))
+			resp.Diagnostics.AddAttributeError(path.Root("guardrails"), "Invalid guardrail configuration",
+				fmt.Sprintf("`%s` of guardrail %q %s for type %q.", attr, g.Name.ValueString(), why, g.Type.ValueString()))
 		}
 		switch g.Type.ValueString() {
 		case "azure-content-safety":
@@ -318,6 +321,9 @@ func (r *guardrailGroupResource) Read(ctx context.Context, req resource.ReadRequ
 		}
 	}
 
+	// Rebuild the list keeping configured order for entries that still exist
+	// and appending unknown remote entries in name order, so pure refreshes
+	// stay diff-free while real drift is surfaced.
 	var guardrails []guardrailModel
 	for _, g := range state.Guardrails {
 		manifest, ok := remote[g.Name.ValueString()]

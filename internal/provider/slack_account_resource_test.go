@@ -70,7 +70,11 @@ resource "truefoundry_slack_account" "notifications" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "bots.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "bots.0.authorized_subjects.0", "team:everyone"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_slack_account.notifications", "bots.*", map[string]string{
+						"name":                  "alerts-bot",
+						"authorized_subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_slack_account.notifications", "bots.*.authorized_subjects.*", "team:everyone"),
 				),
 			},
 			// Bots only.

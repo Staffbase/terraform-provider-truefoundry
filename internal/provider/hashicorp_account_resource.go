@@ -91,9 +91,10 @@ func (r *hashicorpAccountResource) Schema(_ context.Context, _ resource.SchemaRe
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"vaults": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "Vault KV secret stores accessible through this account.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Required:      true,
+				Description:   "Vault KV secret stores accessible through this account.",
+				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -137,7 +138,7 @@ func (r *hashicorpAccountResource) Schema(_ context.Context, _ resource.SchemaRe
 								},
 							},
 						},
-						"authorized_subjects": schema.ListAttribute{
+						"authorized_subjects": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.",
@@ -175,13 +176,14 @@ func (r *hashicorpAccountResource) ValidateConfig(ctx context.Context, req resou
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	for i, v := range config.Vaults {
-		vaultPath := path.Root("vaults").AtListIndex(i)
+	// vaults is a set, so elements have no addressable index; errors are
+	// anchored at the attribute and name the offending vault in the message.
+	for _, v := range config.Vaults {
 		hasToken := !v.Token.IsNull()
 		hasAppRole := v.AppRole != nil
 		if hasToken == hasAppRole {
-			resp.Diagnostics.AddAttributeError(vaultPath, "Invalid vault configuration",
-				"Exactly one of `token` and `approle` must be set.")
+			resp.Diagnostics.AddAttributeError(path.Root("vaults"), "Invalid vault configuration",
+				fmt.Sprintf("Vault %q: exactly one of `token` and `approle` must be set.", v.Name.ValueString()))
 		}
 	}
 }
@@ -235,6 +237,9 @@ func (r *hashicorpAccountResource) Read(ctx context.Context, req resource.ReadRe
 		state.Name = types.StringValue(account.Manifest.Name)
 	}
 
+	// Rebuild the list keeping configured order for entries that still exist
+	// and appending unknown remote entries in name order, so pure refreshes
+	// stay diff-free while real drift is surfaced.
 	var vaults []vaultModel
 	for _, v := range state.Vaults {
 		manifest, ok := remote[v.Name.ValueString()]

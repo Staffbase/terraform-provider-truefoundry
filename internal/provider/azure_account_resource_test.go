@@ -44,7 +44,10 @@ func TestAccAzureAccount_lifecycle(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "fqn", mockcp.Tenant+":azure:spike-blobstorage"),
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.0.connection_string", "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_azure_account.storage", "blob_storages.*", map[string]string{
+						"name":              "devde1truefoundrydevelop",
+						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value",
+					}),
 					resource.TestCheckNoResourceAttr("truefoundry_azure_account.storage", "subscription_id"),
 				),
 			},
@@ -73,8 +76,18 @@ resource "truefoundry_azure_account" "storage" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "subscription_id", "00000000-1111-2222-3333-444444444444"),
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.1.authorized_subjects.0", "team:everyone"),
-					resource.TestCheckNoResourceAttr("truefoundry_azure_account.storage", "blob_storages.1.connection_string"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_azure_account.storage", "blob_storages.*", map[string]string{
+						"name":              "devde1truefoundrydevelop",
+						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value",
+					}),
+					// The second container has authorized subjects but no
+					// connection string (absence is not addressable in sets).
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_azure_account.storage", "blob_storages.*", map[string]string{
+						"name":                  "public-assets",
+						"storage_root":          "https://publicassets.blob.core.windows.net/assets",
+						"authorized_subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_azure_account.storage", "blob_storages.*.authorized_subjects.*", "team:everyone"),
 				),
 			},
 			// Renaming replaces the account.

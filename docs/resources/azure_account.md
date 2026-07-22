@@ -57,7 +57,7 @@ Required:
 
 Optional:
 
-- `authorized_subjects` (List of String) Subjects allowed to use this blob storage, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to use this blob storage, as `<user_type>:<username>` FQNs.
 - `connection_string` (String, Sensitive) Azure storage connection string. Accepts TrueFoundry secret references (recommended); the control plane returns it as stored, so drift is detected. The control plane verifies credentials at apply time — omitting the connection string only works if the control plane itself has an Azure identity with access to the storage.
 
 ## Import

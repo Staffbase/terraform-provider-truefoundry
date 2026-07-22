@@ -60,7 +60,7 @@ resource "truefoundry_guardrail_group" "region" {
 
 ### Optional
 
-- `collaborators` (Attributes List) Subjects with a role on this guardrail config group. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set) Subjects with a role on this guardrail config group. (see [below for nested schema](#nestedatt--collaborators))
 
 ### Read-Only
 
@@ -81,8 +81,8 @@ Required:
 
 Optional:
 
-- `blocklist_names` (List of String) Custom Azure Content Safety blocklists to check text against (`azure-content-safety` only).
-- `categories` (List of String) Harm categories to detect. One or more of: `Hate`, `SelfHarm`, `Sexual`, `Violence`. Required for `azure-content-safety`, must be unset for `azure-prompt-shield`.
+- `blocklist_names` (Set of String) Custom Azure Content Safety blocklists to check text against (`azure-content-safety` only).
+- `categories` (Set of String) Harm categories to detect. One or more of: `Hate`, `SelfHarm`, `Sexual`, `Violence`. Required for `azure-content-safety`, must be unset for `azure-prompt-shield`.
 - `custom_host` (String) Custom endpoint URL; unset uses the default Azure endpoint.
 - `description` (String) Optional description of this guardrail config.
 - `severity_threshold` (Number) Minimum severity (0-6) to flag content; lower blocks more. Required for `azure-content-safety`, must be unset for `azure-prompt-shield`.

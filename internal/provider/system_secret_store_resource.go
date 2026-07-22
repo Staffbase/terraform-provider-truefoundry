@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -80,10 +80,10 @@ func (r *systemSecretStoreResource) Schema(_ context.Context, _ resource.SchemaR
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"secret_stores": schema.ListNestedAttribute{
+			"secret_stores": schema.SetNestedAttribute{
 				Required:    true,
 				Description: "DB-backed secret stores in this account.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -91,7 +91,7 @@ func (r *systemSecretStoreResource) Schema(_ context.Context, _ resource.SchemaR
 							Description: "Name identifying this secret store.",
 							Validators:  []validator.String{stringvalidator.LengthBetween(1, 64)},
 						},
-						"authorized_subjects": schema.ListAttribute{
+						"authorized_subjects": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.",
@@ -165,21 +165,13 @@ func (r *systemSecretStoreResource) Read(ctx context.Context, req resource.ReadR
 		state.Name = types.StringValue(account.Manifest.Name)
 	}
 
-	var stores []systemSecretStoreEntry
-	for _, s := range state.SecretStores {
-		manifest, ok := remote[s.Name.ValueString()]
-		if !ok {
-			continue
-		}
-		delete(remote, s.Name.ValueString())
-		stores = append(stores, systemSecretStoreToModel(manifest))
-	}
-	extra := make([]string, 0, len(remote))
+	names := make([]string, 0, len(remote))
 	for name := range remote {
-		extra = append(extra, name)
+		names = append(names, name)
 	}
-	sort.Strings(extra)
-	for _, name := range extra {
+	sort.Strings(names)
+	stores := make([]systemSecretStoreEntry, 0, len(names))
+	for _, name := range names {
 		stores = append(stores, systemSecretStoreToModel(remote[name]))
 	}
 	state.SecretStores = stores

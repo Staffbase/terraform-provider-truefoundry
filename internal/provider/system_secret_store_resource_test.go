@@ -58,7 +58,11 @@ resource "truefoundry_system_secret_store" "system" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_system_secret_store.system", "secret_stores.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_system_secret_store.system", "secret_stores.0.authorized_subjects.0", "team:everyone"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_system_secret_store.system", "secret_stores.*", map[string]string{
+						"name":                  "spike-secret-store",
+						"authorized_subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_system_secret_store.system", "secret_stores.*.authorized_subjects.*", "team:everyone"),
 				),
 			},
 		},

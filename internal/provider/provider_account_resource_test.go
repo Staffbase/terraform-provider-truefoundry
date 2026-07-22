@@ -84,7 +84,12 @@ resource "truefoundry_provider_account" "openai" {
 					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "fqn", mockcp.Tenant+":openai:spike-openai"),
 					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "provider_type", "openai"),
 					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.0.model_id", "gpt-4o"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.openai", "models.*", map[string]string{
+						"name":          "gpt-4o",
+						"model_id":      "gpt-4o",
+						"model_types.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.openai", "models.*.model_types.*", "chat"),
 				),
 			},
 			// In-place update: add a second model and a base URL.
@@ -110,7 +115,16 @@ resource "truefoundry_provider_account" "openai" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.1.name", "text-embedding-3-small"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.openai", "models.*", map[string]string{
+						"name":          "gpt-4o",
+						"model_id":      "gpt-4o",
+						"model_types.#": "2",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.openai", "models.*", map[string]string{
+						"name":          "text-embedding-3-small",
+						"model_id":      "text-embedding-3-small",
+						"model_types.#": "1",
+					}),
 					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "base_url", "https://api.openai.example.com"),
 					func(*terraform.State) error {
 						if n := mock.AccountCount(); n != 1 {

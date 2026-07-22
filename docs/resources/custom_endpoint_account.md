@@ -69,7 +69,7 @@ resource "truefoundry_custom_endpoint_account" "internal_llm" {
 
 ### Optional
 
-- `collaborators` (Attributes List) Subjects with a role on this custom endpoint account. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set) Subjects with a role on this custom endpoint account. (see [below for nested schema](#nestedatt--collaborators))
 - `endpoint_type` (String) Type of service behind the endpoints, used for tracking. One of: `azure-speech-service`, `other`.
 - `routing_type` (String) Load balancing across the endpoints: `weight` or `priority`. Unset means each endpoint is only reachable individually at /proxy-api/{account-name}/{endpoint-name}.
 - `slug` (String) Identifier of the load balancer, reachable at /proxy-api/{account-name}/{slug}/{upstream-path}. Required when `routing_type` is set.
@@ -90,7 +90,7 @@ Required:
 Optional:
 
 - `auth_headers` (Map of String, Sensitive) Authentication headers sent to the upstream on every request, e.g. {"Ocp-Apim-Subscription-Key" = "..."}. Values accept TrueFoundry secret references (recommended); the control plane returns them as stored, so drift is detected.
-- `authorized_subjects` (List of String) Subjects allowed to access this endpoint, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to access this endpoint, as `<user_type>:<username>` FQNs.
 - `headers` (Map of String) Non-secret custom headers forwarded to the upstream with every request.
 - `loadbalancing` (Attributes) Per-endpoint load balancing settings. Requires `routing_type` on the account; `weight` for weight routing (weights must sum to 100), `priority` for priority routing. (see [below for nested schema](#nestedatt--endpoints--loadbalancing))
 - `tls` (Attributes) TLS verification settings for the upstream connection. (see [below for nested schema](#nestedatt--endpoints--tls))
@@ -101,7 +101,7 @@ Optional:
 Optional:
 
 - `fallback_candidate` (Boolean) Whether this endpoint may serve as a fallback for other endpoints.
-- `fallback_status_codes` (List of String) Status codes for which the request falls back to other endpoints.
+- `fallback_status_codes` (Set of String) Status codes for which the request falls back to other endpoints.
 - `metadata_match` (Map of String) Metadata key-value pairs that must match incoming request metadata headers for this endpoint to be considered.
 - `priority` (Number) Priority of the endpoint; 0 is highest (priority routing).
 - `weight` (Number) Relative routing weight; weights across all endpoints must sum to 100 (weight routing).

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -94,10 +94,10 @@ func (r *gatewayDataAccessConfigResource) Schema(_ context.Context, _ resource.S
 					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
 				},
 			},
-			"rules": schema.ListNestedAttribute{
+			"rules": schema.SetNestedAttribute{
 				Required:    true,
 				Description: "Data access rules; a subject sees data allowed by any matching rule.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -121,26 +121,26 @@ func (r *gatewayDataAccessConfigResource) Schema(_ context.Context, _ resource.S
 							Optional:    true,
 							Description: "Whether the rule is active.",
 						},
-						"subjects": schema.ListAttribute{
+						"subjects": schema.SetAttribute{
 							Required:    true,
 							ElementType: types.StringType,
 							Description: "Subjects the rule applies to, as `<subject_type>:<name>` FQNs, e.g. team:everyone or role:tenant-admin.",
-							Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+							Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 						},
-						"data_types": schema.ListAttribute{
+						"data_types": schema.SetAttribute{
 							Required:    true,
 							ElementType: types.StringType,
 							Description: fmt.Sprintf("Kinds of observability data covered. Elements are one of: `%s`.", strings.Join(gatewayDataTypeValues, "`, `")),
-							Validators: []validator.List{
-								listvalidator.SizeAtLeast(1),
-								listvalidator.ValueStringsAre(stringvalidator.OneOf(gatewayDataTypeValues...)),
+							Validators: []validator.Set{
+								setvalidator.SizeAtLeast(1),
+								setvalidator.ValueStringsAre(stringvalidator.OneOf(gatewayDataTypeValues...)),
 							},
 						},
-						"filters": schema.ListNestedAttribute{
+						"filters": schema.SetNestedAttribute{
 							Optional: true,
 							Description: "Narrows an `all_data` rule to matching requests; not allowed on other scopes. " +
-								"Omit the attribute (rather than an empty list) for an unfiltered rule.",
-							Validators: []validator.List{listvalidator.SizeAtLeast(1)},
+								"Omit the attribute (rather than an empty set) for an unfiltered rule.",
+							Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
 							NestedObject: schema.NestedAttributeObject{
 								Attributes: map[string]schema.Attribute{
 									"field": schema.StringAttribute{
@@ -154,11 +154,11 @@ func (r *gatewayDataAccessConfigResource) Schema(_ context.Context, _ resource.S
 										Optional:    true,
 										Description: "Metadata key to match (required for `metadata` filters, not allowed otherwise).",
 									},
-									"values": schema.ListAttribute{
+									"values": schema.SetAttribute{
 										Required:    true,
 										ElementType: types.StringType,
 										Description: "Values to match against (IN semantics).",
-										Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+										Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 									},
 								},
 							},
@@ -197,34 +197,36 @@ func (r *gatewayDataAccessConfigResource) ValidateConfig(ctx context.Context, re
 		return
 	}
 	seen := map[string]bool{}
-	for i, rule := range config.Rules {
-		rulePath := path.Root("rules").AtListIndex(i)
+	for _, rule := range config.Rules {
+		// rules is a set, so elements have no addressable index; errors are
+		// anchored at the attribute and name the offending rule in the message.
+		rulesPath := path.Root("rules")
+		ruleID := rule.ID.ValueString()
 		if !rule.ID.IsUnknown() && !rule.ID.IsNull() {
-			if seen[rule.ID.ValueString()] {
-				resp.Diagnostics.AddAttributeError(rulePath.AtName("id"),
-					"Invalid data access config", fmt.Sprintf("Duplicate rule id %q.", rule.ID.ValueString()))
+			if seen[ruleID] {
+				resp.Diagnostics.AddAttributeError(rulesPath,
+					"Invalid data access config", fmt.Sprintf("Duplicate rule id %q.", ruleID))
 			}
-			seen[rule.ID.ValueString()] = true
+			seen[ruleID] = true
 		}
 		if len(rule.Filters) > 0 && !rule.Scope.IsUnknown() && rule.Scope.ValueString() != "all_data" {
-			resp.Diagnostics.AddAttributeError(rulePath.AtName("filters"), "Invalid data access rule",
-				"`filters` are only allowed on all_data rules.")
+			resp.Diagnostics.AddAttributeError(rulesPath, "Invalid data access rule",
+				fmt.Sprintf("Rule %q: `filters` are only allowed on all_data rules.", ruleID))
 		}
-		for j, f := range rule.Filters {
+		for _, f := range rule.Filters {
 			if f.Field.IsUnknown() {
 				continue
 			}
-			keyPath := rulePath.AtName("filters").AtListIndex(j).AtName("key")
 			switch f.Field.ValueString() {
 			case "metadata":
 				if f.Key.IsNull() {
-					resp.Diagnostics.AddAttributeError(keyPath, "Invalid data access filter",
-						"`key` is required on metadata filters.")
+					resp.Diagnostics.AddAttributeError(rulesPath, "Invalid data access filter",
+						fmt.Sprintf("Rule %q: `key` is required on metadata filters.", ruleID))
 				}
 			default:
 				if !f.Key.IsNull() {
-					resp.Diagnostics.AddAttributeError(keyPath, "Invalid data access filter",
-						"`key` is only valid on metadata filters.")
+					resp.Diagnostics.AddAttributeError(rulesPath, "Invalid data access filter",
+						fmt.Sprintf("Rule %q: `key` is only valid on metadata filters.", ruleID))
 				}
 			}
 		}

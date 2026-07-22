@@ -51,12 +51,17 @@ resource "truefoundry_provider_account" "azure" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "fqn", mockcp.Tenant+":azure-openai:spike-azure-openai"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.model_id", "gpt-4o-deployment"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.deployment_type", "datazone_eu"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.region", "francecentral"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.cost.metric", "per_1000_tokens"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.cost.input", "0.0022"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.authorized_subjects.0", "user:falk@staffbase.com"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.azure", "models.*", map[string]string{
+						"name":                  "gpt-4o",
+						"model_id":              "gpt-4o-deployment",
+						"deployment_type":       "datazone_eu",
+						"region":                "francecentral",
+						"cost.metric":           "per_1000_tokens",
+						"cost.input":            "0.0022",
+						"model_types.#":         "2",
+						"authorized_subjects.#": "1",
+					}),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.azure", "models.*.authorized_subjects.*", "user:falk@staffbase.com"),
 				),
 			},
 			// In-place update: bump the API version, change the cost, and add
@@ -99,11 +104,59 @@ resource "truefoundry_provider_account" "azure" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.#", "2"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.api_version", "2025-01-01-preview"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.0.cost.input", "0.0025"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.1.cost.metric", "per_1000_embedding_tokens"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.azure", "models.1.cost.value", "0.000025"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.azure", "models.*", map[string]string{
+						"name":        "gpt-4o",
+						"api_version": "2025-01-01-preview",
+						"cost.input":  "0.0025",
+						"cost.output": "0.01",
+					}),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.azure", "models.*", map[string]string{
+						"name":        "embeddings",
+						"cost.metric": "per_1000_embedding_tokens",
+						"cost.value":  "0.000025",
+					}),
 				),
+			},
+			// Regression: listing the same models, model_types, and
+			// authorized_subjects in a different order is a pure set
+			// reordering and must produce an empty plan.
+			{
+				PlanOnly: true,
+				Config: providerConfig(host) + `
+resource "truefoundry_provider_account" "azure" {
+  name           = "spike-azure-openai"
+  provider_type  = "azure-openai"
+  api_key        = "azure-account-key"
+  azure_endpoint = "https://spike.openai.azure.com"
+  models = [
+    {
+      name        = "embeddings"
+      model_id    = "text-embedding-3-large-deployment"
+      api_version = "2024-10-21"
+      model_types = ["embedding"]
+      cost = {
+        metric = "per_1000_embedding_tokens"
+        value  = 0.000025
+      }
+    },
+    {
+      name            = "gpt-4o"
+      model_id        = "gpt-4o-deployment"
+      api_version     = "2025-01-01-preview"
+      foundation_model = "gpt-4o-2024-11-20"
+      deployment_type = "datazone_eu"
+      region          = "francecentral"
+      model_types     = ["responses", "chat"]
+      cost = {
+        metric = "per_1000_tokens"
+        input  = 0.0025
+        output = 0.01
+      }
+      authorized_subjects = ["user:falk@staffbase.com"]
+    },
+  ]
+}
+`,
 			},
 		},
 	})
@@ -141,8 +194,11 @@ resource "truefoundry_provider_account" "foundry" {
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_provider_account.foundry", "fqn", mockcp.Tenant+":azure-foundry:spike-azure-foundry"),
-					resource.TestCheckResourceAttr("truefoundry_provider_account.foundry", "models.0.azure_endpoint", "https://phi-4.eastus.models.ai.azure.com"),
-					resource.TestCheckResourceAttrSet("truefoundry_provider_account.foundry", "models.0.api_key"),
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.foundry", "models.*", map[string]string{
+						"name":           "phi-4",
+						"azure_endpoint": "https://phi-4.eastus.models.ai.azure.com",
+						"api_key":        "foundry-model-key",
+					}),
 				),
 			},
 			// In-place update: add a second deployment with its own endpoint/key.
@@ -220,7 +276,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("api_version` is required"),
+			want: regexp.MustCompile("`api_version` of model \"gpt-4o\" is required"),
 		},
 		{
 			name: "azure-foundry with account api_key",
@@ -258,7 +314,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("api_key` is required"),
+			want: regexp.MustCompile("`api_key` of model \"phi-4\" is required"),
 		},
 		{
 			name: "openai with azure fields",
@@ -276,7 +332,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("deployment_type` must not be set"),
+			want: regexp.MustCompile("`deployment_type` of model \"gpt-4o\" must not be set"),
 		},
 		{
 			name: "cost with both value and input",
@@ -298,7 +354,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("Exactly one of `value` .* or `input`"),
+			want: regexp.MustCompile("Model \"gpt-4o\": exactly one of `value` \\(scalar metrics\\) or `input`"),
 		},
 		{
 			name: "openai with region",
@@ -316,7 +372,7 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile("region` must not be set"),
+			want: regexp.MustCompile("`region` of model \"gpt-4o\" must not be set"),
 		},
 	}
 	for _, tc := range cases {

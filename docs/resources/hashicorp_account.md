@@ -59,7 +59,7 @@ Required:
 Optional:
 
 - `approle` (Attributes) Vault AppRole auth. Exactly one of `token` and `approle` must be set. The control plane verifies the credentials against Vault at apply time. (see [below for nested schema](#nestedatt--vaults--approle))
-- `authorized_subjects` (List of String) Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.
+- `authorized_subjects` (Set of String) Subjects allowed to use this secret store, as `<user_type>:<username>` FQNs.
 - `namespace` (String) Vault Enterprise namespace to use.
 - `root_path` (String) Path prefix within the KV mount under which secrets are read.
 - `token` (String, Sensitive) Vault token for token auth. Exactly one of `token` and `approle` must be set. The control plane verifies the credentials against Vault at apply time.

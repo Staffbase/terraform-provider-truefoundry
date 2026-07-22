@@ -128,7 +128,7 @@ func (r *customEndpointAccountResource) Schema(_ context.Context, _ resource.Sch
 				Optional:    true,
 				Description: "Identifier of the load balancer, reachable at /proxy-api/{account-name}/{slug}/{upstream-path}. Required when `routing_type` is set.",
 			},
-			"collaborators": schema.ListNestedAttribute{
+			"collaborators": schema.SetNestedAttribute{
 				Optional:    true,
 				Description: "Subjects with a role on this custom endpoint account.",
 				NestedObject: schema.NestedAttributeObject{
@@ -145,9 +145,10 @@ func (r *customEndpointAccountResource) Schema(_ context.Context, _ resource.Sch
 				},
 			},
 			"endpoints": schema.ListNestedAttribute{
-				Required:    true,
-				Description: "Upstream endpoints proxied through this account.",
-				Validators:  []validator.List{listvalidator.SizeAtLeast(1)},
+				Required:      true,
+				Description:   "Upstream endpoints proxied through this account.",
+				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
+				PlanModifiers: []planmodifier.List{orderInsensitive()},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -173,7 +174,7 @@ func (r *customEndpointAccountResource) Schema(_ context.Context, _ resource.Sch
 							ElementType: types.StringType,
 							Description: "Non-secret custom headers forwarded to the upstream with every request.",
 						},
-						"authorized_subjects": schema.ListAttribute{
+						"authorized_subjects": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
 							Description: "Subjects allowed to access this endpoint, as `<user_type>:<username>` FQNs.",
@@ -204,7 +205,7 @@ func (r *customEndpointAccountResource) Schema(_ context.Context, _ resource.Sch
 									Optional:    true,
 									Description: "Priority of the endpoint; 0 is highest (priority routing).",
 								},
-								"fallback_status_codes": schema.ListAttribute{
+								"fallback_status_codes": schema.SetAttribute{
 									Optional:    true,
 									ElementType: types.StringType,
 									Description: "Status codes for which the request falls back to other endpoints.",
@@ -260,38 +261,41 @@ func (r *customEndpointAccountResource) ValidateConfig(ctx context.Context, req 
 			"`slug` is required when `routing_type` is set: the load balancer is addressed as /proxy-api/{account-name}/{slug}/.")
 	}
 
-	for i, e := range config.Endpoints {
-		lbPath := path.Root("endpoints").AtListIndex(i).AtName("loadbalancing")
+	// endpoints is a set, so elements have no addressable index; errors are
+	// anchored at the attribute and name the offending endpoint in the message.
+	for _, e := range config.Endpoints {
+		endpointsPath := path.Root("endpoints")
+		name := e.Name.ValueString()
 		if routingType == "" {
 			if e.Loadbalancing != nil {
-				resp.Diagnostics.AddAttributeError(lbPath, "Invalid endpoint configuration",
-					"`loadbalancing` requires `routing_type` to be set on the account.")
+				resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+					fmt.Sprintf("Endpoint %q: `loadbalancing` requires `routing_type` to be set on the account.", name))
 			}
 			continue
 		}
 		if e.Loadbalancing == nil {
-			resp.Diagnostics.AddAttributeError(lbPath, "Invalid endpoint configuration",
-				fmt.Sprintf("`loadbalancing` is required on every endpoint when routing_type is %q.", routingType))
+			resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+				fmt.Sprintf("Endpoint %q: `loadbalancing` is required on every endpoint when routing_type is %q.", name, routingType))
 			continue
 		}
 		switch routingType {
 		case "weight":
 			if e.Loadbalancing.Weight.IsNull() {
-				resp.Diagnostics.AddAttributeError(lbPath.AtName("weight"), "Invalid endpoint configuration",
-					"`weight` is required for weight routing.")
+				resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+					fmt.Sprintf("Endpoint %q: `weight` is required for weight routing.", name))
 			}
 			if !e.Loadbalancing.Priority.IsNull() {
-				resp.Diagnostics.AddAttributeError(lbPath.AtName("priority"), "Invalid endpoint configuration",
-					"`priority` must not be set for weight routing.")
+				resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+					fmt.Sprintf("Endpoint %q: `priority` must not be set for weight routing.", name))
 			}
 		case "priority":
 			if e.Loadbalancing.Priority.IsNull() {
-				resp.Diagnostics.AddAttributeError(lbPath.AtName("priority"), "Invalid endpoint configuration",
-					"`priority` is required for priority routing.")
+				resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+					fmt.Sprintf("Endpoint %q: `priority` is required for priority routing.", name))
 			}
 			if !e.Loadbalancing.Weight.IsNull() {
-				resp.Diagnostics.AddAttributeError(lbPath.AtName("weight"), "Invalid endpoint configuration",
-					"`weight` must not be set for priority routing.")
+				resp.Diagnostics.AddAttributeError(endpointsPath, "Invalid endpoint configuration",
+					fmt.Sprintf("Endpoint %q: `weight` must not be set for priority routing.", name))
 			}
 		}
 	}
@@ -357,6 +361,9 @@ func (r *customEndpointAccountResource) Read(ctx context.Context, req resource.R
 		}
 	}
 
+	// Rebuild the list keeping configured order for entries that still exist
+	// and appending unknown remote entries in name order, so pure refreshes
+	// stay diff-free while real drift is surfaced.
 	var endpoints []endpointModel
 	for _, e := range state.Endpoints {
 		manifest, ok := remote[e.Name.ValueString()]
