@@ -185,7 +185,7 @@ resource "truefoundry_provider_account" "foundry" {
       name           = "phi-4"
       model_id       = "phi-4-deployment"
       azure_endpoint = "https://phi-4.eastus.models.ai.azure.com"
-      api_key        = "foundry-model-key"
+      api_key        = "tfy-secret://tenant:secrets:foundry-model-key"
       api_version    = "2024-05-01-preview"
       model_types    = ["chat"]
     },
@@ -197,7 +197,7 @@ resource "truefoundry_provider_account" "foundry" {
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.foundry", "models.*", map[string]string{
 						"name":           "phi-4",
 						"azure_endpoint": "https://phi-4.eastus.models.ai.azure.com",
-						"api_key":        "foundry-model-key",
+						"api_key":        "tfy-secret://tenant:secrets:foundry-model-key",
 					}),
 				),
 			},
@@ -212,7 +212,7 @@ resource "truefoundry_provider_account" "foundry" {
       name           = "phi-4"
       model_id       = "phi-4-deployment"
       azure_endpoint = "https://phi-4.eastus.models.ai.azure.com"
-      api_key        = "foundry-model-key"
+      api_key        = "tfy-secret://tenant:secrets:foundry-model-key"
       api_version    = "2024-05-01-preview"
       model_types    = ["chat"]
     },
@@ -220,7 +220,7 @@ resource "truefoundry_provider_account" "foundry" {
       name           = "mistral-large"
       model_id       = "mistral-large-deployment"
       azure_endpoint = "https://mistral.westeu.models.ai.azure.com"
-      api_key        = "foundry-mistral-key"
+      api_key        = "tfy-secret://tenant:secrets:foundry-mistral-key"
       model_types    = ["chat", "completion"]
     },
   ]
@@ -297,6 +297,25 @@ resource "truefoundry_provider_account" "bad" {
 }
 `,
 			want: regexp.MustCompile("`api_key` must not be set"),
+		},
+		{
+			name: "azure-foundry model with raw api_key",
+			config: `
+resource "truefoundry_provider_account" "bad" {
+  name          = "spike-bad"
+  provider_type = "azure-foundry"
+  models = [
+    {
+      name           = "phi-4"
+      model_id       = "phi-4-deployment"
+      azure_endpoint = "https://phi-4.eastus.models.ai.azure.com"
+      api_key        = "raw-secret-key"
+      model_types    = ["chat"]
+    },
+  ]
+}
+`,
+			want: regexp.MustCompile("`api_key` of model \"phi-4\" must be a TrueFoundry secret reference"),
 		},
 		{
 			name: "azure-foundry model without api_key",

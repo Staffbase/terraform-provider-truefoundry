@@ -64,7 +64,7 @@ resource "truefoundry_provider_account" "azure_foundry" {
       name           = "phi-4"
       model_id       = "phi-4-deployment"
       azure_endpoint = "https://phi-4.eastus.models.ai.azure.com"
-      api_key        = var.foundry_deployment_key
+      api_key        = "tfy-secret://my-tenant:my-secrets:phi-4-key" # per-model keys must be secret references
       api_version    = "2024-05-01-preview"
       model_types    = ["chat"]
     },
@@ -138,7 +138,7 @@ resource "truefoundry_provider_account" "virtual" {
 
 ### Required
 
-- `models` (Attributes List) Models exposed on the gateway through this provider account. Order is not significant; changes that only reorder models produce no diff. (see [below for nested schema](#nestedatt--models))
+- `models` (Attributes Set) Models exposed on the gateway through this provider account. Order is not significant. (see [below for nested schema](#nestedatt--models))
 - `name` (String) Name of the provider account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
 
 ### Optional
@@ -166,7 +166,7 @@ Required:
 
 Optional:
 
-- `api_key` (String, Sensitive) API key of the Azure AI Foundry deployment. Required for `azure-foundry` models, where auth is per model. Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state).
+- `api_key` (String) API key of the Azure AI Foundry deployment. Required for `azure-foundry` models, where auth is per model. Must be a TrueFoundry secret reference (`tfy-secret://...` or a `...:secret-store:...` FQN path) — raw keys are rejected: they would end up in the Terraform state, and per-model API keys are not treated as sensitive so that model diffs stay readable in plans.
 - `api_version` (String) Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry`.
 - `authorized_subjects` (Set of String) Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. The control plane rejects `serviceaccount:` subjects here. Unset means account-level access.
 - `azure_endpoint` (String) Azure AI Foundry endpoint URL, e.g. https://{deployment}.{region}.models.ai.azure.com. Required for `azure-foundry` models.

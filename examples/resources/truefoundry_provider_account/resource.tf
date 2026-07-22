@@ -49,7 +49,7 @@ resource "truefoundry_provider_account" "azure_foundry" {
       name           = "phi-4"
       model_id       = "phi-4-deployment"
       azure_endpoint = "https://phi-4.eastus.models.ai.azure.com"
-      api_key        = var.foundry_deployment_key
+      api_key        = "tfy-secret://my-tenant:my-secrets:phi-4-key" # per-model keys must be secret references
       api_version    = "2024-05-01-preview"
       model_types    = ["chat"]
     },
