@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -199,12 +198,10 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 				Description: "AWS secret access key (`aws-bedrock` only; required together with `access_key_id`). " +
 					"Accepts a TrueFoundry secret reference (recommended).",
 			},
-			"models": schema.ListNestedAttribute{
-				Required: true,
-				Description: "Models exposed on the gateway through this provider account. " +
-					"Order is not significant; changes that only reorder models produce no diff.",
-				Validators:    []validator.List{listvalidator.SizeAtLeast(1)},
-				PlanModifiers: []planmodifier.List{orderInsensitive()},
+			"models": schema.SetNestedAttribute{
+				Required:    true,
+				Description: "Models exposed on the gateway through this provider account. Order is not significant.",
+				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"name": schema.StringAttribute{
@@ -285,10 +282,11 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 							Description: "Region of the deployment, e.g. francecentral (`azure-openai`) or a per-model AWS region override (`aws-bedrock`).",
 						},
 						"api_key": schema.StringAttribute{
-							Optional:  true,
-							Sensitive: true,
+							Optional: true,
 							Description: "API key of the Azure AI Foundry deployment. Required for `azure-foundry` models, where auth is per model. " +
-								"Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state).",
+								"Must be a TrueFoundry secret reference (`tfy-secret://...` or a `...:secret-store:...` FQN path) — " +
+								"raw keys are rejected: they would end up in the Terraform state, and per-model API keys are " +
+								"not treated as sensitive so that model diffs stay readable in plans.",
 						},
 						"azure_endpoint": schema.StringAttribute{
 							Optional:    true,
@@ -451,6 +449,10 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 		for _, m := range config.Models {
 			name := m.Name.ValueString()
 			requireModel(!m.APIKey.IsNull(), name, "api_key", "is required")
+			if !m.APIKey.IsNull() && !m.APIKey.IsUnknown() && !isSecretReference(m.APIKey.ValueString()) {
+				requireModel(false, name, "api_key",
+					"must be a TrueFoundry secret reference (`tfy-secret://...` or a `...:secret-store:...` FQN path); raw keys are rejected because per-model API keys are shown in plans")
+			}
 			requireModel(!m.AzureEndpoint.IsNull(), name, "azure_endpoint", "is required")
 			requireModel(m.FoundationModel.IsNull(), name, "foundation_model", "must not be set")
 			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
@@ -622,27 +624,25 @@ func (r *providerAccountResource) Read(ctx context.Context, req resource.ReadReq
 		}
 	}
 
-	// Rebuild the models list, keeping configured order for entries that
-	// still exist and appending unknown remote entries in name order, so
-	// pure refreshes stay diff-free while real drift is surfaced. Per-model
-	// API keys fall back to the value already in state when the control
-	// plane omits them.
-	var models []modelModel
+	// Rebuild the models set from the remote integrations. Per-model API keys
+	// fall back to the value already in state (matched by model name) when the
+	// control plane omits them.
+	stateAPIKeys := map[string]types.String{}
 	for _, m := range state.Models {
-		manifest, ok := remote[m.Name.ValueString()]
-		if !ok {
-			continue
-		}
-		delete(remote, m.Name.ValueString())
-		models = append(models, integrationToModel(manifest, m.APIKey))
+		stateAPIKeys[m.Name.ValueString()] = m.APIKey
 	}
-	extra := make([]string, 0, len(remote))
+	names := make([]string, 0, len(remote))
 	for name := range remote {
-		extra = append(extra, name)
+		names = append(names, name)
 	}
-	sort.Strings(extra)
-	for _, name := range extra {
-		models = append(models, integrationToModel(remote[name], types.StringNull()))
+	sort.Strings(names)
+	models := make([]modelModel, 0, len(names))
+	for _, name := range names {
+		apiKey, ok := stateAPIKeys[name]
+		if !ok {
+			apiKey = types.StringNull()
+		}
+		models = append(models, integrationToModel(remote[name], apiKey))
 	}
 	state.Models = models
 
@@ -886,6 +886,14 @@ func integrationToModel(manifest client.ModelIntegration, stateAPIKey types.Stri
 		m.ModelTypes = append(m.ModelTypes, types.StringValue(t))
 	}
 	return m
+}
+
+// isSecretReference reports whether s is a TrueFoundry secret reference —
+// either a system secret store URI (tfy-secret://tenant:account:name) or a
+// secret store integration FQN path
+// (tenant:hashicorp:account:secret-store:store::path/value).
+func isSecretReference(s string) bool {
+	return strings.HasPrefix(s, "tfy-secret://") || strings.Contains(s, ":secret-store:")
 }
 
 func stringOrNull(s string) types.String {
