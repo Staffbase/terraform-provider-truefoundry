@@ -6,8 +6,9 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
 - **Model access** — provider accounts (OpenAI, Azure OpenAI, Azure AI Foundry,
   AWS Bedrock, virtual models) and the models exposed through them, plus custom
   endpoint accounts for arbitrary HTTP services proxied by the gateway.
-- **Gateway configuration** — budgets, data access, data routing, and guardrail
-  wiring, plus guardrail groups (Azure Prompt Shield and Content Safety).
+- **Gateway configuration** — budgets, data access, data routing, guardrail
+  wiring, and global settings, plus guardrail groups (Azure Prompt Shield and
+  Content Safety).
 - **Platform integrations** — Azure blob storage, Slack notification channels,
   HashiCorp Vault secret stores, and the built-in system secret store.
 - **Access** — virtual accounts (service accounts) with scoped permissions.
@@ -99,11 +100,11 @@ documentation page.
 - **Give CI/CD its own virtual account.** Run Terraform with a
   `truefoundry_virtual_account` token whose permissions cover only the
   resources it manages, rather than a personal access token.
-- **Treat gateway configs as singletons.** The four
-  `truefoundry_gateway_*_config` resources are tenant-wide singletons: define
-  at most one of each per control plane, and an apply replaces the entire rule
-  set. If a config already exists on the tenant, import it before the first
-  apply.
+- **Treat gateway configs as singletons.** The `truefoundry_gateway_*_config`
+  resources and `truefoundry_gateway_global_settings` are tenant-wide
+  singletons: define at most one of each per control plane, and an apply
+  replaces the entire rule set or settings manifest. If a config already exists
+  on the tenant, import it before the first apply.
 - **Hand tokens to consumers via a secret store.** A virtual account's token is
   stored in the Terraform state; prefer `secret_store_config` to sync it into
   Vault instead of wiring the sensitive `token` attribute through outputs.
@@ -131,6 +132,7 @@ terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
+terraform import truefoundry_gateway_global_settings.settings gateway-global-settings
 ```
 
 All attributes — including the models and `api_key` as stored on the control
@@ -165,6 +167,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_data_access_config`](docs/resources/gateway_data_access_config.md),
 [`truefoundry_gateway_data_routing_config`](docs/resources/gateway_data_routing_config.md),
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
+[`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
@@ -200,9 +203,10 @@ make docs-check  # validate
   uses them**, an apply would strip them from its manifest.
 - Gateway configs: the budget config (`truefoundry_gateway_budget_config`),
   data access config (`truefoundry_gateway_data_access_config`), data routing
-  config (`truefoundry_gateway_data_routing_config`), and guardrails config
-  (`truefoundry_gateway_guardrails_config`) are modeled. Other gateway configs
-  (rate limiting, fallback, load balancing, OTel, global settings) and the
+  config (`truefoundry_gateway_data_routing_config`), guardrails config
+  (`truefoundry_gateway_guardrails_config`), and global settings
+  (`truefoundry_gateway_global_settings`) are modeled. Other gateway configs
+  (rate limiting, fallback, load balancing, OTel) and the
   newer tenant/team budget configs (`tenant-budget-config`,
   `team-budget-config`) are not.
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,

@@ -276,13 +276,15 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // isGatewayConfigType reports whether typ is a tenant-wide gateway config
 // manifest type the mock models.
 func isGatewayConfigType(typ string) bool {
-	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config"
+	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings"
 }
 
 // applyGatewayConfig stores a tenant-wide gateway config (e.g.
 // "gateway-budget-config") keyed by its manifest type.
 func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
-	if len(name) < 3 || len(name) > 32 {
+	// gateway-global-settings is the one gateway config manifest without a
+	// name field.
+	if typ != "gateway-global-settings" && (len(name) < 3 || len(name) > 32) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name must be 3-32 characters"})
 		return
 	}
@@ -296,6 +298,8 @@ func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, man
 		msg = validateGatewayDataRoutingConfig(manifest)
 	case "gateway-guardrails-config":
 		msg = validateGatewayGuardrailsConfig(manifest)
+	case "gateway-global-settings":
+		msg = validateGatewayGlobalSettings(manifest)
 	}
 	if msg != "" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": msg})
@@ -613,6 +617,101 @@ func validateGatewayGuardrailsConfig(manifest map[string]any) string {
 		for _, key := range []string{"llm_input_guardrails", "llm_output_guardrails", "mcp_tool_pre_invoke_guardrails", "mcp_tool_post_invoke_guardrails"} {
 			if _, ok := m[key].([]any); !ok {
 				return fmt.Sprintf("%s is required on guardrails rules", key)
+			}
+		}
+	}
+	return ""
+}
+
+// validateGatewayGlobalSettings enforces the manifest shape derived from the
+// TrueFoundry SDK's GlobalSettings schema (model_configuration is not in the
+// published SDK; shape taken from a deployed control plane). All settings are
+// optional — an empty manifest is valid.
+func validateGatewayGlobalSettings(manifest map[string]any) string {
+	if name, _ := manifest["name"].(string); name != "" {
+		return "gateway-global-settings has no name field"
+	}
+	if raw, ok := manifest["retry_settings"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return "retry_settings must be an object"
+		}
+		if attempts, ok := m["attempts"].(float64); !ok || attempts < 1 {
+			return "attempts is required on retry_settings and must be at least 1"
+		}
+		if codes, ok := m["on_status_codes"]; ok {
+			list, ok := codes.([]any)
+			if !ok || len(list) == 0 {
+				return "on_status_codes must be a non-empty list"
+			}
+			for _, c := range list {
+				if s, _ := c.(string); s == "" {
+					return "on_status_codes entries must be non-empty strings"
+				}
+			}
+		}
+	}
+	if raw, ok := manifest["logging_settings"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return "logging_settings must be an object"
+		}
+		typ, _ := m["type"].(string)
+		switch typ {
+		case "always", "never":
+			if _, ok := m["log_body_by_default"]; ok {
+				return "log_body_by_default is only valid with logging type header_controlled"
+			}
+		case "header_controlled":
+			if _, ok := m["log_body_by_default"].(bool); !ok {
+				return "log_body_by_default is required with logging type header_controlled"
+			}
+		default:
+			return fmt.Sprintf("unknown logging settings type %q", typ)
+		}
+	}
+	if raw, ok := manifest["semantic_cache_settings"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return "semantic_cache_settings must be an object"
+		}
+		if model, _ := m["semantic_cache_embedding_model"].(string); model == "" {
+			return "semantic_cache_embedding_model is required on semantic_cache_settings"
+		}
+	}
+	if raw, ok := manifest["guardrail_settings"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return "guardrail_settings must be an object"
+		}
+		_, hasTimeout := m["timeout_ms"]
+		_, hasParallel := m["enable_parallel_execution"]
+		if !hasTimeout && !hasParallel {
+			return "guardrail_settings needs at least one of timeout_ms and enable_parallel_execution"
+		}
+		if hasTimeout {
+			if timeout, ok := m["timeout_ms"].(float64); !ok || timeout < 1 {
+				return "timeout_ms must be a number of at least 1"
+			}
+		}
+		if hasParallel {
+			if _, ok := m["enable_parallel_execution"].(bool); !ok {
+				return "enable_parallel_execution must be a boolean"
+			}
+		}
+	}
+	if raw, ok := manifest["model_configuration"]; ok {
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return "model_configuration must be an object"
+		}
+		models, ok := m["allowed_models"].([]any)
+		if !ok {
+			return "allowed_models is required on model_configuration"
+		}
+		for _, v := range models {
+			if s, _ := v.(string); s == "" {
+				return "allowed_models entries must be non-empty strings"
 			}
 		}
 	}
