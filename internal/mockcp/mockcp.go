@@ -30,6 +30,9 @@ type Server struct {
 	gwconfigs  map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
 	mcpservers map[string]*mcpServer      // keyed by manifest name
 	agents     map[string]*agent          // keyed by manifest name
+	mlrepos    map[string]*mlRepo         // keyed by manifest name
+	skills     map[string]*artifactSeries // keyed by manifest name
+	prompts    map[string]*artifactSeries // keyed by manifest name
 	nextID     int
 }
 
@@ -62,7 +65,7 @@ type agent struct {
 
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, mcpservers: map[string]*mcpServer{}, agents: map[string]*agent{}, nextID: 1}
+	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, mcpservers: map[string]*mcpServer{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
 }
 
 // Handler returns the HTTP handler implementing the API.
@@ -80,6 +83,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/svc/v1/agents", s.auth(s.handleApplyAgent))
 	mux.HandleFunc("GET /api/svc/v1/agents", s.auth(s.handleListAgents))
 	mux.HandleFunc("DELETE /api/svc/v1/agents/{id}", s.auth(s.handleDeleteAgent))
+	mux.HandleFunc("PUT /api/svc/v1/ml-repos", s.auth(s.handleApplyMlRepo))
+	mux.HandleFunc("GET /api/svc/v1/ml-repos", s.auth(s.handleListMlRepos))
+	mux.HandleFunc("DELETE /api/svc/v1/ml-repos/{id}", s.auth(s.handleDeleteMlRepo))
+	mux.HandleFunc("PUT /api/svc/v1/agent-skill-versions", s.auth(s.handleApplyAgentSkill))
+	mux.HandleFunc("GET /api/svc/v1/agent-skills", s.auth(s.handleListAgentSkills))
+	mux.HandleFunc("DELETE /api/svc/v1/agent-skills/{id}", s.auth(s.handleDeleteAgentSkill))
+	mux.HandleFunc("PUT /api/svc/v1/prompt-versions", s.auth(s.handleApplyPrompt))
+	mux.HandleFunc("GET /api/svc/v1/prompts", s.auth(s.handleListPrompts))
+	mux.HandleFunc("DELETE /api/svc/v1/prompts/{id}", s.auth(s.handleDeletePrompt))
 	return mux
 }
 

@@ -119,6 +119,9 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newVirtualMcpServerResource,
 		newAgentResource,
 		newRemoteAgentResource,
+		newMlRepoResource,
+		newAgentSkillResource,
+		newPromptResource,
 	}
 }
 

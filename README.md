@@ -13,7 +13,7 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
   HashiCorp Vault secret stores, and the built-in system secret store.
 - **Agents** — TrueFoundry-hosted agents (model, instructions, skills, MCP
   servers, structured output) and self-hosted remote agents proxied by the
-  gateway.
+  gateway, plus ML repos with the agent skills and prompts they contain.
 - **Access** — virtual accounts (service accounts) with scoped permissions.
 
 Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework).
@@ -119,8 +119,9 @@ documentation page.
 
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
-are imported by their FQN, agents by their name, virtual accounts by their ID,
-and gateway configs (tenant-wide singletons) by fixed string IDs:
+are imported by their FQN, agents, ML repos, agent skills, and prompts by
+their name, virtual accounts by their ID, and gateway configs (tenant-wide
+singletons) by fixed string IDs:
 
 ```sh
 terraform import truefoundry_provider_account.azure_openai my-tenant:azure-openai:my-azure-openai
@@ -134,6 +135,9 @@ terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
 terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs
 terraform import truefoundry_agent.triage support-triage
 terraform import truefoundry_remote_agent.billing billing-agent
+terraform import truefoundry_ml_repo.artifacts gateway-artifacts
+terraform import truefoundry_agent_skill.writing ticket-writing
+terraform import truefoundry_prompt.triage ticket-triage
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
@@ -180,6 +184,9 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_virtual_mcp_server`](docs/resources/virtual_mcp_server.md),
 [`truefoundry_agent`](docs/resources/agent.md),
 [`truefoundry_remote_agent`](docs/resources/remote_agent.md),
+[`truefoundry_ml_repo`](docs/resources/ml_repo.md),
+[`truefoundry_agent_skill`](docs/resources/agent_skill.md),
+[`truefoundry_prompt`](docs/resources/prompt.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 
@@ -232,11 +239,25 @@ make docs-check  # validate
   ownership are not modeled either (same steamroll caveat as above).
 - Agents: TrueFoundry-hosted agents (`truefoundry_agent`) and self-hosted
   remote agents (`truefoundry_remote_agent`) are modeled. The legacy `agent`
-  manifest type (hosted A2A / prompt-sourced), agent skills as their own
-  resource, seeded `messages`, and ownership are not — **do not manage a
-  pre-existing agent that uses them** (Read refuses mismatched types on
-  import). Every apply creates a new immutable agent version on the control
-  plane; referenced MCP servers must already exist on the tenant.
+  manifest type (hosted A2A / prompt-sourced), seeded `messages`, and
+  ownership are not — **do not manage a pre-existing agent that uses them**
+  (Read refuses mismatched types on import). Every apply creates a new
+  immutable agent version on the control plane; referenced MCP servers must
+  already exist on the tenant.
+- ML repos, agent skills, and prompts: `truefoundry_ml_repo` models only the
+  repo container (runs, models, and other artifact types it can hold are
+  untouched, but **deleting a repo deletes everything in it**). Agent skills
+  (`truefoundry_agent_skill`): the control plane ingests every applied source
+  into managed blob storage, so the configured source cannot be read back —
+  skill content changed outside Terraform is not drift-detected, and the
+  first apply after an import re-uploads the configured source as a new
+  version; the CLI-only `local` source type is not modeled. Prompts
+  (`truefoundry_prompt`): only plain-string message contents are modeled, and
+  the advanced manifest blocks (tools, MCP servers, guardrails, response
+  format, routing, caching, sub-agents) are not — **updating a pre-existing
+  prompt that uses them drops them from the new version**. Every skill or
+  prompt apply creates a new immutable version; the containing ML repo must
+  already exist on the tenant.
 - Virtual accounts: auto-rotation, notification targets, ownership, and identity
   provider mappings are not modeled (same caveat as above for pre-existing
   accounts). The account token is stored in the Terraform state; prefer
