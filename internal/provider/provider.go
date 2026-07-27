@@ -116,6 +116,7 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newGatewayGuardrailsConfigResource,
 		newGatewayGlobalSettingsResource,
 		newMcpServerResource,
+		newOpenapiMcpServerResource,
 		newVirtualMcpServerResource,
 		newAgentResource,
 		newRemoteAgentResource,

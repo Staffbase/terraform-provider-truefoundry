@@ -96,7 +96,7 @@ func (r *mcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 	resp.Schema = schema.Schema{
 		Description: "Manages a remote MCP server registered on the TrueFoundry AI Gateway, proxied at " +
 			"{gateway}/{tenant}/mcp/{name}/server. Applied as an `mcp-server/remote` manifest via `PUT /api/svc/v1/apply`. " +
-			"OpenAPI-based and TrueFoundry-managed MCP servers are not supported. " +
+			"For OpenAPI-based MCP servers use `truefoundry_openapi_mcp_server`; TrueFoundry-managed and stdio servers are not supported. " +
 			"Existing servers can be imported by their FQN, e.g. `terraform import truefoundry_mcp_server.example my-tenant:mcp-server:my-server`.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -127,86 +127,7 @@ func (r *mcpServerResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 				Required:    true,
 				Description: "URL of the MCP server endpoint, e.g. https://mcp.example.com/mcp.",
 			},
-			"auth": schema.SingleNestedAttribute{
-				Optional: true,
-				Description: "How the gateway authenticates against the MCP server. Omitted means no authentication. " +
-					"`type` selects the mode; the other fields belong to one mode each.",
-				Attributes: map[string]schema.Attribute{
-					"type": schema.StringAttribute{
-						Required:    true,
-						Description: "Authentication mode: `header` (static headers), `oauth2`, or `passthrough` (forward the caller's Authorization header).",
-						Validators:  []validator.String{stringvalidator.OneOf(mcpAuthTypeValues...)},
-					},
-					"headers": schema.MapAttribute{
-						Optional:    true,
-						Sensitive:   true,
-						ElementType: types.StringType,
-						Description: "Headers sent to the MCP server, e.g. {\"Authorization\" = \"Bearer ...\"} (type `header`). " +
-							"Values accept TrueFoundry secret references (recommended); the control plane returns them as stored, so drift is detected.",
-					},
-					"auth_level": schema.StringAttribute{
-						Optional:    true,
-						Description: "Whether the headers apply for all users (`global`) or each user supplies their own (`per_user`) (type `header`).",
-						Validators:  []validator.String{stringvalidator.OneOf("global", "per_user")},
-					},
-					"grant_type": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 grant: `authorization_code` or `client_credentials` (type `oauth2`).",
-						Validators:  []validator.String{stringvalidator.OneOf("authorization_code", "client_credentials")},
-					},
-					"authorization_url": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 authorization endpoint (type `oauth2`, authorization_code grant).",
-					},
-					"token_url": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 token endpoint (type `oauth2`).",
-					},
-					"client_id": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 client ID; accepts a TrueFoundry secret reference (type `oauth2`).",
-					},
-					"client_secret": schema.StringAttribute{
-						Optional:    true,
-						Sensitive:   true,
-						Description: "OAuth2 client secret. A TrueFoundry secret reference is recommended; the control plane returns it as stored, so drift is detected (type `oauth2`).",
-					},
-					"registration_url": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 dynamic client registration endpoint (type `oauth2`).",
-					},
-					"introspection_url": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 token introspection endpoint (type `oauth2`).",
-					},
-					"provider": schema.StringAttribute{
-						Optional:    true,
-						Description: "OAuth2 provider: `custom`, `auth0`, or `okta` (type `oauth2`).",
-						Validators:  []validator.String{stringvalidator.OneOf("custom", "auth0", "okta")},
-					},
-					"jwt_source": schema.StringAttribute{
-						Optional:    true,
-						Description: "Which token the gateway forwards: `access_token` or `id_token` (type `oauth2`).",
-						Validators:  []validator.String{stringvalidator.OneOf("access_token", "id_token")},
-					},
-					"scopes": schema.SetAttribute{
-						Optional:    true,
-						ElementType: types.StringType,
-						Description: "OAuth2 scopes to request (type `oauth2`).",
-					},
-					"additional_token_params": schema.MapAttribute{
-						Optional:    true,
-						ElementType: types.StringType,
-						Description: "Extra parameters sent with the token request (type `oauth2`).",
-					},
-					"code_challenge_methods_supported": schema.SetAttribute{
-						Optional:    true,
-						ElementType: types.StringType,
-						Description: "PKCE code challenge methods the authorization server supports; only `S256` is allowed (type `oauth2`).",
-						Validators:  []validator.Set{setvalidator.ValueStringsAre(stringvalidator.OneOf("S256"))},
-					},
-				},
-			},
+			"auth": mcpAuthSchemaAttribute(),
 			"tool_settings": schema.ListNestedAttribute{
 				Optional:      true,
 				Description:   "Per-tool overrides for the tools the MCP server exposes.",
@@ -310,11 +231,104 @@ func (r *mcpServerResource) ValidateConfig(ctx context.Context, req resource.Val
 	}
 	var config mcpServerModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
-	if resp.Diagnostics.HasError() || config.Auth == nil {
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateMcpAuthConfig(config.Auth, &resp.Diagnostics)
+}
+
+// mcpAuthSchemaAttribute is the `auth` attribute shared by the remote and
+// OpenAPI MCP server resources.
+func mcpAuthSchemaAttribute() schema.SingleNestedAttribute {
+	return schema.SingleNestedAttribute{
+		Optional: true,
+		Description: "How the gateway authenticates against the MCP server. Omitted means no authentication. " +
+			"`type` selects the mode; the other fields belong to one mode each.",
+		Attributes: map[string]schema.Attribute{
+			"type": schema.StringAttribute{
+				Required:    true,
+				Description: "Authentication mode: `header` (static headers), `oauth2`, or `passthrough` (forward the caller's Authorization header).",
+				Validators:  []validator.String{stringvalidator.OneOf(mcpAuthTypeValues...)},
+			},
+			"headers": schema.MapAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				ElementType: types.StringType,
+				Description: "Headers sent to the MCP server, e.g. {\"Authorization\" = \"Bearer ...\"} (type `header`). " +
+					"Values accept TrueFoundry secret references (recommended); the control plane returns them as stored, so drift is detected.",
+			},
+			"auth_level": schema.StringAttribute{
+				Optional:    true,
+				Description: "Whether the headers apply for all users (`global`) or each user supplies their own (`per_user`) (type `header`).",
+				Validators:  []validator.String{stringvalidator.OneOf("global", "per_user")},
+			},
+			"grant_type": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 grant: `authorization_code` or `client_credentials` (type `oauth2`).",
+				Validators:  []validator.String{stringvalidator.OneOf("authorization_code", "client_credentials")},
+			},
+			"authorization_url": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 authorization endpoint (type `oauth2`, authorization_code grant).",
+			},
+			"token_url": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 token endpoint (type `oauth2`).",
+			},
+			"client_id": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 client ID; accepts a TrueFoundry secret reference (type `oauth2`).",
+			},
+			"client_secret": schema.StringAttribute{
+				Optional:    true,
+				Sensitive:   true,
+				Description: "OAuth2 client secret. A TrueFoundry secret reference is recommended; the control plane returns it as stored, so drift is detected (type `oauth2`).",
+			},
+			"registration_url": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 dynamic client registration endpoint (type `oauth2`).",
+			},
+			"introspection_url": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 token introspection endpoint (type `oauth2`).",
+			},
+			"provider": schema.StringAttribute{
+				Optional:    true,
+				Description: "OAuth2 provider: `custom`, `auth0`, or `okta` (type `oauth2`).",
+				Validators:  []validator.String{stringvalidator.OneOf("custom", "auth0", "okta")},
+			},
+			"jwt_source": schema.StringAttribute{
+				Optional:    true,
+				Description: "Which token the gateway forwards: `access_token` or `id_token` (type `oauth2`).",
+				Validators:  []validator.String{stringvalidator.OneOf("access_token", "id_token")},
+			},
+			"scopes": schema.SetAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Description: "OAuth2 scopes to request (type `oauth2`).",
+			},
+			"additional_token_params": schema.MapAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Description: "Extra parameters sent with the token request (type `oauth2`).",
+			},
+			"code_challenge_methods_supported": schema.SetAttribute{
+				Optional:    true,
+				ElementType: types.StringType,
+				Description: "PKCE code challenge methods the authorization server supports; only `S256` is allowed (type `oauth2`).",
+				Validators:  []validator.Set{setvalidator.ValueStringsAre(stringvalidator.OneOf("S256"))},
+			},
+		},
+	}
+}
+
+// validateMcpAuthConfig enforces the per-auth-type field combinations of the
+// `auth` block shared by the remote and OpenAPI MCP server resources.
+func validateMcpAuthConfig(auth *mcpServerAuthModel, diags *diag.Diagnostics) {
+	if auth == nil {
 		return
 	}
 
-	auth := config.Auth
 	authPath := path.Root("auth")
 	headerFields := map[string]bool{"headers": len(auth.Headers) > 0, "auth_level": !auth.AuthLevel.IsNull()}
 	oauthFields := map[string]bool{
@@ -334,7 +348,7 @@ func (r *mcpServerResource) ValidateConfig(ctx context.Context, req resource.Val
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			resp.Diagnostics.AddAttributeError(authPath.AtName(name), "Invalid MCP server auth configuration",
+			diags.AddAttributeError(authPath.AtName(name), "Invalid MCP server auth configuration",
 				fmt.Sprintf("`%s` must not be set when auth type is %q.", name, authType))
 		}
 	}
@@ -342,11 +356,11 @@ func (r *mcpServerResource) ValidateConfig(ctx context.Context, req resource.Val
 	switch auth.Type.ValueString() {
 	case "header":
 		if len(auth.Headers) == 0 {
-			resp.Diagnostics.AddAttributeError(authPath.AtName("headers"), "Invalid MCP server auth configuration",
+			diags.AddAttributeError(authPath.AtName("headers"), "Invalid MCP server auth configuration",
 				"`headers` is required for auth type \"header\".")
 		}
 		if auth.AuthLevel.IsNull() {
-			resp.Diagnostics.AddAttributeError(authPath.AtName("auth_level"), "Invalid MCP server auth configuration",
+			diags.AddAttributeError(authPath.AtName("auth_level"), "Invalid MCP server auth configuration",
 				"`auth_level` is required for auth type \"header\".")
 		}
 		forbid(oauthFields, "header")
@@ -361,7 +375,7 @@ func (r *mcpServerResource) ValidateConfig(ctx context.Context, req resource.Val
 			{"jwt_source", !auth.JWTSource.IsNull()},
 		} {
 			if !required.set {
-				resp.Diagnostics.AddAttributeError(authPath.AtName(required.name), "Invalid MCP server auth configuration",
+				diags.AddAttributeError(authPath.AtName(required.name), "Invalid MCP server auth configuration",
 					fmt.Sprintf("`%s` is required for auth type \"oauth2\".", required.name))
 			}
 		}
@@ -405,7 +419,7 @@ func (r *mcpServerResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 	if server.Manifest.Type != "mcp-server/remote" {
 		resp.Diagnostics.AddError("Unexpected MCP server type",
-			fmt.Sprintf("%s is of type %q; use the matching resource (truefoundry_virtual_mcp_server for mcp-server/virtual).",
+			fmt.Sprintf("%s is of type %q; use the matching resource (truefoundry_openapi_mcp_server for mcp-server/openapi, truefoundry_virtual_mcp_server for mcp-server/virtual).",
 				server.FQN, server.Manifest.Type))
 		return
 	}

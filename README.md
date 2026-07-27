@@ -181,6 +181,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_mcp_server`](docs/resources/mcp_server.md),
+[`truefoundry_openapi_mcp_server`](docs/resources/openapi_mcp_server.md),
 [`truefoundry_virtual_mcp_server`](docs/resources/virtual_mcp_server.md),
 [`truefoundry_agent`](docs/resources/agent.md),
 [`truefoundry_remote_agent`](docs/resources/remote_agent.md),
@@ -230,9 +231,10 @@ make docs-check  # validate
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
-- MCP servers: remote (`truefoundry_mcp_server`) and virtual
-  (`truefoundry_virtual_mcp_server`) servers are modeled. OpenAPI-based
-  (`mcp-server/openapi`), stdio, and TrueFoundry-managed MCP servers are not —
+- MCP servers: remote (`truefoundry_mcp_server`), OpenAPI-based
+  (`truefoundry_openapi_mcp_server`), and virtual
+  (`truefoundry_virtual_mcp_server`) servers are modeled. Stdio and
+  TrueFoundry-managed MCP servers are not —
   **do not manage a pre-existing MCP server of those types with these
   resources** (Read refuses mismatched types on import). Auth0 organization
   settings on `oauth2` auth (`use_organization`, `default_organization`) and

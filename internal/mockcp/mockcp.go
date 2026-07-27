@@ -344,7 +344,7 @@ func isGatewayConfigType(typ string) bool {
 // isMcpServerType reports whether typ is a standalone MCP server manifest
 // type the mock models.
 func isMcpServerType(typ string) bool {
-	return typ == "mcp-server/remote" || typ == "mcp-server/virtual"
+	return typ == "mcp-server/remote" || typ == "mcp-server/openapi" || typ == "mcp-server/virtual"
 }
 
 // applyMcpServer stores a standalone MCP server manifest, keyed by name.
@@ -396,8 +396,11 @@ var mcpServerNameRe = regexp.MustCompile(`^[a-z][a-z0-9\-]{1,71}[a-z0-9]$`)
 // mcpManifestSchemaName returns the schema name the real control plane uses
 // in validation error messages for an MCP server manifest type.
 func mcpManifestSchemaName(typ string) string {
-	if typ == "mcp-server/virtual" {
+	switch typ {
+	case "mcp-server/virtual":
 		return "VirtualMCPServerManifest"
+	case "mcp-server/openapi":
+		return "OpenAPIMCPServerManifest"
 	}
 	return "RemoteMCPServerManifest"
 }
@@ -421,42 +424,90 @@ func (s *Server) validateMcpServerManifest(typ string, manifest map[string]any) 
 		return ""
 	}
 
+	validateAuthData := func(manifest map[string]any) string {
+		auth, ok := manifest["auth_data"].(map[string]any)
+		if !ok {
+			return ""
+		}
+		switch authType, _ := auth["type"].(string); authType {
+		case "passthrough":
+		case "header":
+			if msg := validateHeaders(auth); msg != "" {
+				return msg
+			}
+			if level, _ := auth["auth_level"].(string); level != "global" && level != "per_user" {
+				return "auth_data of type header requires auth_level global or per_user"
+			}
+		case "oauth2":
+			if u, _ := auth["token_url"].(string); u == "" {
+				return "auth_data of type oauth2 requires token_url"
+			}
+			if gt, _ := auth["grant_type"].(string); gt != "authorization_code" && gt != "client_credentials" {
+				return "auth_data of type oauth2 requires grant_type authorization_code or client_credentials"
+			}
+			if p, _ := auth["provider"].(string); p != "custom" && p != "auth0" && p != "okta" {
+				return "auth_data of type oauth2 requires provider custom, auth0, or okta"
+			}
+			if js, _ := auth["jwt_source"].(string); js != "access_token" && js != "id_token" {
+				return "auth_data of type oauth2 requires jwt_source access_token or id_token"
+			}
+		default:
+			return "auth_data type must be header, oauth2, or passthrough"
+		}
+		return ""
+	}
+
 	switch typ {
 	case "mcp-server/remote":
 		if u, _ := manifest["url"].(string); u == "" {
 			return "url is required for a remote MCP server"
 		}
-		if auth, ok := manifest["auth_data"].(map[string]any); ok {
-			switch authType, _ := auth["type"].(string); authType {
-			case "passthrough":
-			case "header":
-				if msg := validateHeaders(auth); msg != "" {
-					return msg
-				}
-				if level, _ := auth["auth_level"].(string); level != "global" && level != "per_user" {
-					return "auth_data of type header requires auth_level global or per_user"
-				}
-			case "oauth2":
-				if u, _ := auth["token_url"].(string); u == "" {
-					return "auth_data of type oauth2 requires token_url"
-				}
-				if gt, _ := auth["grant_type"].(string); gt != "authorization_code" && gt != "client_credentials" {
-					return "auth_data of type oauth2 requires grant_type authorization_code or client_credentials"
-				}
-				if p, _ := auth["provider"].(string); p != "custom" && p != "auth0" && p != "okta" {
-					return "auth_data of type oauth2 requires provider custom, auth0, or okta"
-				}
-				if js, _ := auth["jwt_source"].(string); js != "access_token" && js != "id_token" {
-					return "auth_data of type oauth2 requires jwt_source access_token or id_token"
-				}
-			default:
-				return "auth_data type must be header, oauth2, or passthrough"
-			}
+		if msg := validateAuthData(manifest); msg != "" {
+			return msg
 		}
 		for _, raw := range toolSettingsOf(manifest) {
 			setting, _ := raw.(map[string]any)
 			if toolName, _ := setting["name"].(string); toolName == "" {
 				return "tool_settings entries require a name"
+			}
+		}
+	case "mcp-server/openapi":
+		if u, _ := manifest["url"].(string); u == "" {
+			return "url is required for an OpenAPI MCP server"
+		}
+		source, ok := manifest["openapi_spec_source"].(map[string]any)
+		if !ok {
+			return "openapi_spec_source is required for an OpenAPI MCP server"
+		}
+		switch sourceType, _ := source["type"].(string); sourceType {
+		case "remote", "upload":
+			if u, _ := source["url"].(string); u == "" {
+				return "openapi_spec_source of type " + sourceType + " requires url"
+			}
+		case "inline":
+			if spec, _ := source["openapi_spec"].(string); spec == "" {
+				if _, ok := source["openapi_spec"].(map[string]any); !ok {
+					return "openapi_spec_source of type inline requires openapi_spec"
+				}
+			}
+		default:
+			return "openapi_spec_source type must be remote, upload, or inline"
+		}
+		if msg := validateAuthData(manifest); msg != "" {
+			return msg
+		}
+		for _, raw := range toolSettingsOf(manifest) {
+			setting, _ := raw.(map[string]any)
+			method, _ := setting["method"].(string)
+			switch method {
+			case "get", "post", "put", "patch", "delete", "head":
+			default:
+				return "tool_settings entries require a method of get, post, put, patch, delete, or head"
+			}
+			for _, key := range []string{"path", "name", "description"} {
+				if v, _ := setting[key].(string); v == "" {
+					return "tool_settings entries require a " + key
+				}
 			}
 		}
 	case "mcp-server/virtual":
