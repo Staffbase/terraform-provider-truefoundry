@@ -115,9 +115,9 @@ documentation page.
 ## Importing existing resources
 
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
-HashiCorp accounts, system secret stores, and guardrail groups are imported by
-their FQN, virtual accounts by their ID, and gateway configs (tenant-wide
-singletons) by fixed string IDs:
+HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
+are imported by their FQN, virtual accounts by their ID, and gateway configs
+(tenant-wide singletons) by fixed string IDs:
 
 ```sh
 terraform import truefoundry_provider_account.azure_openai my-tenant:azure-openai:my-azure-openai
@@ -127,6 +127,8 @@ terraform import truefoundry_slack_account.notifications my-tenant:slack:slack-w
 terraform import truefoundry_hashicorp_account.secrets my-tenant:hashicorp:vault-secrets
 terraform import truefoundry_system_secret_store.system my-tenant:truefoundry:system-secret-store
 terraform import truefoundry_guardrail_group.region my-tenant:guardrail-config-group:my-group
+terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
+terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
@@ -169,6 +171,8 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
 [`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
+[`truefoundry_mcp_server`](docs/resources/mcp_server.md),
+[`truefoundry_virtual_mcp_server`](docs/resources/virtual_mcp_server.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 
@@ -212,6 +216,13 @@ make docs-check  # validate
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
+- MCP servers: remote (`truefoundry_mcp_server`) and virtual
+  (`truefoundry_virtual_mcp_server`) servers are modeled. OpenAPI-based
+  (`mcp-server/openapi`), stdio, and TrueFoundry-managed MCP servers are not —
+  **do not manage a pre-existing MCP server of those types with these
+  resources** (Read refuses mismatched types on import). Auth0 organization
+  settings on `oauth2` auth (`use_organization`, `default_organization`) and
+  ownership are not modeled either (same steamroll caveat as above).
 - Virtual accounts: auto-rotation, notification targets, ownership, and identity
   provider mappings are not modeled (same caveat as above for pre-existing
   accounts). The account token is stored in the Terraform state; prefer

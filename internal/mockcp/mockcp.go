@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,11 +24,12 @@ const Tenant = "mock-tenant"
 type Server struct {
 	apiKey string
 
-	mu        sync.Mutex
-	accounts  map[string]*account        // keyed by manifest name
-	vaccounts map[string]*virtualAccount // keyed by manifest name
-	gwconfigs map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
-	nextID    int
+	mu         sync.Mutex
+	accounts   map[string]*account        // keyed by manifest name
+	vaccounts  map[string]*virtualAccount // keyed by manifest name
+	gwconfigs  map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
+	mcpservers map[string]*mcpServer      // keyed by manifest name
+	nextID     int
 }
 
 type account struct {
@@ -46,9 +48,14 @@ type virtualAccount struct {
 	manifest map[string]any
 }
 
+type mcpServer struct {
+	id       string
+	manifest map[string]any
+}
+
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, nextID: 1}
+	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, mcpservers: map[string]*mcpServer{}, nextID: 1}
 }
 
 // Handler returns the HTTP handler implementing the API.
@@ -57,6 +64,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/svc/v1/apply", s.auth(s.handleApply))
 	mux.HandleFunc("POST /api/svc/v1/delete", s.auth(s.handleDelete))
 	mux.HandleFunc("GET /api/svc/v1/provider-integrations", s.auth(s.handleListIntegrations))
+	mux.HandleFunc("GET /api/svc/v1/mcp-servers", s.auth(s.handleListMcpServers))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/config/{type}", s.auth(s.handleGetGatewayConfig))
 	mux.HandleFunc("PUT /api/svc/v1/virtual-accounts", s.auth(s.handleApplyVirtualAccount))
 	mux.HandleFunc("GET /api/svc/v1/virtual-accounts/{id}", s.auth(s.handleGetVirtualAccount))
@@ -91,6 +99,20 @@ func (s *Server) DeleteVirtualAccountByName(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.vaccounts, name)
+}
+
+// McpServerCount returns the number of stored MCP servers.
+func (s *Server) McpServerCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.mcpservers)
+}
+
+// DeleteMcpServer removes an MCP server out-of-band (simulates drift/manual deletion).
+func (s *Server) DeleteMcpServer(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.mcpservers, name)
 }
 
 // GatewayConfigCount returns the number of stored gateway configs.
@@ -233,6 +255,10 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		s.applyGatewayConfig(w, typ, name, req.Manifest, req.DryRun)
 		return
 	}
+	if isMcpServerType(typ) {
+		s.applyMcpServer(w, typ, name, req.Manifest, req.DryRun)
+		return
+	}
 	if !strings.HasPrefix(typ, "provider-account/") {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": fmt.Sprintf("unsupported manifest type %q", typ)})
 		return
@@ -277,6 +303,202 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // manifest type the mock models.
 func isGatewayConfigType(typ string) bool {
 	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings"
+}
+
+// isMcpServerType reports whether typ is a standalone MCP server manifest
+// type the mock models.
+func isMcpServerType(typ string) bool {
+	return typ == "mcp-server/remote" || typ == "mcp-server/virtual"
+}
+
+// applyMcpServer stores a standalone MCP server manifest, keyed by name.
+// Unlike provider accounts, the real control plane's apply response for MCP
+// servers carries no data.id — clients resolve the ID via the list endpoint.
+func (s *Server) applyMcpServer(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
+	if !mcpServerNameRe.MatchString(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: %s /name: must match pattern %q", mcpManifestSchemaName(typ), mcpServerNameRe.String())})
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if msg := s.validateMcpServerManifest(typ, manifest); msg != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": msg})
+		return
+	}
+
+	action := "CREATE"
+	var existing map[string]any
+	srv, ok := s.mcpservers[name]
+	if ok {
+		action = "UPDATE"
+		existing = srv.manifest
+	} else {
+		srv = &mcpServer{id: "mcp-" + strconv.Itoa(s.nextID)}
+		s.nextID++
+	}
+	if !dryRun {
+		srv.manifest = manifest
+		s.mcpservers[name] = srv
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"existingManifest": existing,
+		"action":           action,
+		"data": map[string]any{
+			"name":     name,
+			"fqn":      Tenant + ":mcp-server:" + name,
+			"manifest": manifest,
+			"proxyUrl": "{{mcpProxyBaseURL}}/" + Tenant + "/mcp/" + name + "/server",
+		},
+	})
+}
+
+// mcpServerNameRe is the MCP server name pattern the real control plane
+// enforces.
+var mcpServerNameRe = regexp.MustCompile(`^[a-z][a-z0-9\-]{1,71}[a-z0-9]$`)
+
+// mcpManifestSchemaName returns the schema name the real control plane uses
+// in validation error messages for an MCP server manifest type.
+func mcpManifestSchemaName(typ string) string {
+	if typ == "mcp-server/virtual" {
+		return "VirtualMCPServerManifest"
+	}
+	return "RemoteMCPServerManifest"
+}
+
+// validateMcpServerManifest enforces the MCP server manifest rules derived
+// from the TrueFoundry SDK schemas and observed control plane behavior.
+// Callers must hold s.mu (virtual servers check their source servers exist).
+func (s *Server) validateMcpServerManifest(typ string, manifest map[string]any) string {
+	if desc, _ := manifest["description"].(string); desc == "" {
+		return "description is required"
+	}
+	if _, ok := manifest["collaborators"].([]any); !ok {
+		return "collaborators are required"
+	}
+
+	validateHeaders := func(auth map[string]any) string {
+		headers, ok := auth["headers"].(map[string]any)
+		if !ok || len(headers) == 0 {
+			return "auth_data of type header requires headers"
+		}
+		return ""
+	}
+
+	switch typ {
+	case "mcp-server/remote":
+		if u, _ := manifest["url"].(string); u == "" {
+			return "url is required for a remote MCP server"
+		}
+		if auth, ok := manifest["auth_data"].(map[string]any); ok {
+			switch authType, _ := auth["type"].(string); authType {
+			case "passthrough":
+			case "header":
+				if msg := validateHeaders(auth); msg != "" {
+					return msg
+				}
+				if level, _ := auth["auth_level"].(string); level != "global" && level != "per_user" {
+					return "auth_data of type header requires auth_level global or per_user"
+				}
+			case "oauth2":
+				if u, _ := auth["token_url"].(string); u == "" {
+					return "auth_data of type oauth2 requires token_url"
+				}
+				if gt, _ := auth["grant_type"].(string); gt != "authorization_code" && gt != "client_credentials" {
+					return "auth_data of type oauth2 requires grant_type authorization_code or client_credentials"
+				}
+				if p, _ := auth["provider"].(string); p != "custom" && p != "auth0" && p != "okta" {
+					return "auth_data of type oauth2 requires provider custom, auth0, or okta"
+				}
+				if js, _ := auth["jwt_source"].(string); js != "access_token" && js != "id_token" {
+					return "auth_data of type oauth2 requires jwt_source access_token or id_token"
+				}
+			default:
+				return "auth_data type must be header, oauth2, or passthrough"
+			}
+		}
+		for _, raw := range toolSettingsOf(manifest) {
+			setting, _ := raw.(map[string]any)
+			if toolName, _ := setting["name"].(string); toolName == "" {
+				return "tool_settings entries require a name"
+			}
+		}
+	case "mcp-server/virtual":
+		servers, _ := manifest["servers"].([]any)
+		if len(servers) == 0 {
+			return "a virtual MCP server needs at least one source server"
+		}
+		for _, raw := range servers {
+			source, _ := raw.(map[string]any)
+			sourceName, _ := source["name"].(string)
+			if sourceName == "" {
+				return "servers entries require a name"
+			}
+			if _, ok := s.mcpservers[sourceName]; !ok {
+				return fmt.Sprintf("Virtual MCP Server validation failed:\nSource server %q not found", sourceName)
+			}
+			if auth, ok := source["auth_data"].(map[string]any); ok {
+				if authType, _ := auth["type"].(string); authType != "header" {
+					return "source server auth_data type must be header"
+				}
+				if msg := validateHeaders(auth); msg != "" {
+					return msg
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func toolSettingsOf(manifest map[string]any) []any {
+	settings, _ := manifest["tool_settings"].([]any)
+	return settings
+}
+
+// handleListMcpServers implements GET /api/svc/v1/mcp-servers.
+func (s *Server) handleListMcpServers(w http.ResponseWriter, r *http.Request) {
+	fqnFilter := r.URL.Query().Get("fqn")
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+
+	s.mu.Lock()
+	var items []map[string]any
+	for name, srv := range s.mcpservers {
+		fqn := Tenant + ":mcp-server:" + name
+		if fqnFilter != "" && fqn != fqnFilter {
+			continue
+		}
+		items = append(items, map[string]any{
+			"id":           srv.id,
+			"name":         name,
+			"fqn":          fqn,
+			"manifest":     srv.manifest,
+			"accountId":    "acc-" + Tenant,
+			"createdAt":    "2026-07-15T00:00:00Z",
+			"updatedAt":    "2026-07-15T00:00:00Z",
+			"isTfyManaged": false,
+			"proxyUrl":     "{{mcpProxyBaseURL}}/" + Tenant + "/mcp/" + name + "/server",
+		})
+	}
+	s.mu.Unlock()
+
+	sort.Slice(items, func(i, j int) bool { return items[i]["fqn"].(string) < items[j]["fqn"].(string) })
+	total := len(items)
+	if offset > total {
+		offset = total
+	}
+	end := min(offset+limit, total)
+	page := items[offset:end]
+	if page == nil {
+		page = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":       page,
+		"pagination": map[string]int{"total": total, "offset": offset, "limit": limit},
+	})
 }
 
 // applyGatewayConfig stores a tenant-wide gateway config (e.g.
@@ -735,6 +957,15 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delete(s.gwconfigs, typ)
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	if typ, _ := req.Manifest["type"].(string); isMcpServerType(typ) {
+		if _, ok := s.mcpservers[name]; !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": fmt.Sprintf("Resource with name %s not found", name)})
+			return
+		}
+		delete(s.mcpservers, name)
 		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
