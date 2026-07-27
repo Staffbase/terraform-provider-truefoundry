@@ -3,12 +3,12 @@
 page_title: "truefoundry_mcp_server Resource - TrueFoundry"
 subcategory: ""
 description: |-
-  Manages a remote MCP server registered on the TrueFoundry AI Gateway, proxied at {gateway}/{tenant}/mcp/{name}/server. Applied as an mcp-server/remote manifest via PUT /api/svc/v1/apply. OpenAPI-based and TrueFoundry-managed MCP servers are not supported. Existing servers can be imported by their FQN, e.g. terraform import truefoundry_mcp_server.example my-tenant:mcp-server:my-server.
+  Manages a remote MCP server registered on the TrueFoundry AI Gateway, proxied at {gateway}/{tenant}/mcp/{name}/server. Applied as an mcp-server/remote manifest via PUT /api/svc/v1/apply. For OpenAPI-based MCP servers use truefoundry_openapi_mcp_server; TrueFoundry-managed and stdio servers are not supported. Existing servers can be imported by their FQN, e.g. terraform import truefoundry_mcp_server.example my-tenant:mcp-server:my-server.
 ---
 
 # truefoundry_mcp_server (Resource)
 
-Manages a remote MCP server registered on the TrueFoundry AI Gateway, proxied at {gateway}/{tenant}/mcp/{name}/server. Applied as an `mcp-server/remote` manifest via `PUT /api/svc/v1/apply`. OpenAPI-based and TrueFoundry-managed MCP servers are not supported. Existing servers can be imported by their FQN, e.g. `terraform import truefoundry_mcp_server.example my-tenant:mcp-server:my-server`.
+Manages a remote MCP server registered on the TrueFoundry AI Gateway, proxied at {gateway}/{tenant}/mcp/{name}/server. Applied as an `mcp-server/remote` manifest via `PUT /api/svc/v1/apply`. For OpenAPI-based MCP servers use `truefoundry_openapi_mcp_server`; TrueFoundry-managed and stdio servers are not supported. Existing servers can be imported by their FQN, e.g. `terraform import truefoundry_mcp_server.example my-tenant:mcp-server:my-server`.
 
 ## Example Usage
 

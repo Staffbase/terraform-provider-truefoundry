@@ -45,11 +45,26 @@ type McpToolAnnotations struct {
 }
 
 // McpToolSetting overrides metadata of one tool exposed by an MCP server.
+// Remote servers use Name/Description/Disabled/Annotations; OpenAPI servers
+// define tools with Method/Path/Name/Description/Annotations instead.
 type McpToolSetting struct {
 	Name        string              `json:"name"`
 	Description string              `json:"description,omitempty"`
 	Disabled    *bool               `json:"disabled,omitempty"`
 	Annotations *McpToolAnnotations `json:"annotations,omitempty"`
+
+	// mcp-server/openapi
+	Method string `json:"method,omitempty"` // get, post, put, patch, delete, or head
+	Path   string `json:"path,omitempty"`
+}
+
+// OpenApiSpecSource points at the OpenAPI spec of an "mcp-server/openapi"
+// manifest: type "remote" or "upload" carries a URL, type "inline" carries
+// the spec itself (JSON or YAML string).
+type OpenApiSpecSource struct {
+	Type        string `json:"type"`
+	URL         string `json:"url,omitempty"`
+	OpenAPISpec string `json:"openapi_spec,omitempty"`
 }
 
 // McpServerHeaderOverride overrides request headers for one source server of
@@ -68,20 +83,25 @@ type McpServerSource struct {
 }
 
 // McpServerManifest is a standalone MCP server manifest, type
-// "mcp-server/remote" (URL/TLSSettings/ToolSettings/AuthData/AdditionalHeaders)
-// or "mcp-server/virtual" (Servers). The "mcp-server/openapi",
-// "mcp-server/stdio", and "tfy-managed" variants are not modeled.
+// "mcp-server/remote" (URL/TLSSettings/ToolSettings/AuthData/AdditionalHeaders),
+// "mcp-server/openapi" (additionally OpenAPISpecSource/EnableAllTools), or
+// "mcp-server/virtual" (Servers). The "mcp-server/stdio" and "tfy-managed"
+// variants are not modeled.
 type McpServerManifest struct {
 	Type        string `json:"type"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
 
-	// mcp-server/remote
+	// mcp-server/remote and mcp-server/openapi
 	URL               string            `json:"url,omitempty"`
 	TLSSettings       *TLSSettings      `json:"tls_settings,omitempty"`
 	ToolSettings      []McpToolSetting  `json:"tool_settings,omitempty"`
 	AuthData          *McpServerAuth    `json:"auth_data,omitempty"`
 	AdditionalHeaders map[string]string `json:"additional_headers,omitempty"`
+
+	// mcp-server/openapi
+	OpenAPISpecSource *OpenApiSpecSource `json:"openapi_spec_source,omitempty"`
+	EnableAllTools    *bool              `json:"enable_all_tools,omitempty"`
 
 	// mcp-server/virtual
 	Servers []McpServerSource `json:"servers,omitempty"`
