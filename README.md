@@ -11,6 +11,9 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
   Content Safety).
 - **Platform integrations** — Azure blob storage, Slack notification channels,
   HashiCorp Vault secret stores, and the built-in system secret store.
+- **Agents** — TrueFoundry-hosted agents (model, instructions, skills, MCP
+  servers, structured output) and self-hosted remote agents proxied by the
+  gateway.
 - **Access** — virtual accounts (service accounts) with scoped permissions.
 
 Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework).
@@ -116,8 +119,8 @@ documentation page.
 
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
-are imported by their FQN, virtual accounts by their ID, and gateway configs
-(tenant-wide singletons) by fixed string IDs:
+are imported by their FQN, agents by their name, virtual accounts by their ID,
+and gateway configs (tenant-wide singletons) by fixed string IDs:
 
 ```sh
 terraform import truefoundry_provider_account.azure_openai my-tenant:azure-openai:my-azure-openai
@@ -129,6 +132,8 @@ terraform import truefoundry_system_secret_store.system my-tenant:truefoundry:sy
 terraform import truefoundry_guardrail_group.region my-tenant:guardrail-config-group:my-group
 terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
 terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs
+terraform import truefoundry_agent.triage support-triage
+terraform import truefoundry_remote_agent.billing billing-agent
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
@@ -173,6 +178,8 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_mcp_server`](docs/resources/mcp_server.md),
 [`truefoundry_virtual_mcp_server`](docs/resources/virtual_mcp_server.md),
+[`truefoundry_agent`](docs/resources/agent.md),
+[`truefoundry_remote_agent`](docs/resources/remote_agent.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 
@@ -223,6 +230,13 @@ make docs-check  # validate
   resources** (Read refuses mismatched types on import). Auth0 organization
   settings on `oauth2` auth (`use_organization`, `default_organization`) and
   ownership are not modeled either (same steamroll caveat as above).
+- Agents: TrueFoundry-hosted agents (`truefoundry_agent`) and self-hosted
+  remote agents (`truefoundry_remote_agent`) are modeled. The legacy `agent`
+  manifest type (hosted A2A / prompt-sourced), agent skills as their own
+  resource, seeded `messages`, and ownership are not — **do not manage a
+  pre-existing agent that uses them** (Read refuses mismatched types on
+  import). Every apply creates a new immutable agent version on the control
+  plane; referenced MCP servers must already exist on the tenant.
 - Virtual accounts: auto-rotation, notification targets, ownership, and identity
   provider mappings are not modeled (same caveat as above for pre-existing
   accounts). The account token is stored in the Terraform state; prefer

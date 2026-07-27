@@ -29,6 +29,7 @@ type Server struct {
 	vaccounts  map[string]*virtualAccount // keyed by manifest name
 	gwconfigs  map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
 	mcpservers map[string]*mcpServer      // keyed by manifest name
+	agents     map[string]*agent          // keyed by manifest name
 	nextID     int
 }
 
@@ -53,9 +54,15 @@ type mcpServer struct {
 	manifest map[string]any
 }
 
+type agent struct {
+	id            string
+	latestVersion int
+	manifest      map[string]any
+}
+
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, mcpservers: map[string]*mcpServer{}, nextID: 1}
+	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, mcpservers: map[string]*mcpServer{}, agents: map[string]*agent{}, nextID: 1}
 }
 
 // Handler returns the HTTP handler implementing the API.
@@ -70,6 +77,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/svc/v1/virtual-accounts/{id}", s.auth(s.handleGetVirtualAccount))
 	mux.HandleFunc("DELETE /api/svc/v1/virtual-accounts/{id}", s.auth(s.handleDeleteVirtualAccount))
 	mux.HandleFunc("GET /api/svc/v1/virtual-accounts/{id}/token", s.auth(s.handleGetVirtualAccountToken))
+	mux.HandleFunc("PUT /api/svc/v1/agents", s.auth(s.handleApplyAgent))
+	mux.HandleFunc("GET /api/svc/v1/agents", s.auth(s.handleListAgents))
+	mux.HandleFunc("DELETE /api/svc/v1/agents/{id}", s.auth(s.handleDeleteAgent))
 	return mux
 }
 
@@ -113,6 +123,20 @@ func (s *Server) DeleteMcpServer(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.mcpservers, name)
+}
+
+// AgentCount returns the number of stored agents.
+func (s *Server) AgentCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.agents)
+}
+
+// DeleteAgentByName removes an agent out-of-band (simulates drift/manual deletion).
+func (s *Server) DeleteAgentByName(name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.agents, name)
 }
 
 // GatewayConfigCount returns the number of stored gateway configs.
@@ -499,6 +523,248 @@ func (s *Server) handleListMcpServers(w http.ResponseWriter, r *http.Request) {
 		"data":       page,
 		"pagination": map[string]int{"total": total, "offset": offset, "limit": limit},
 	})
+}
+
+// agentNameRe is (an equivalent of) the agent name pattern the real control
+// plane enforces: `^[a-z](?:[a-z0-9]|-(?!-)){1,30}[a-z0-9]$` — Go regexp has
+// no lookahead, so double hyphens are excluded structurally and the length is
+// checked separately.
+var agentNameRe = regexp.MustCompile(`^[a-z](-?[a-z0-9]){2,31}$`)
+
+// handleApplyAgent implements PUT /api/svc/v1/agents: create an agent or a
+// new version of an existing one. Verified against a real control plane
+// (2026-07-27): the response carries the new AgentVersion under data, dryRun
+// validates without persisting, and referenced MCP servers must exist (404).
+func (s *Server) handleApplyAgent(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Manifest map[string]any `json:"manifest"`
+		DryRun   bool           `json:"dryRun"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Manifest == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid request body"})
+		return
+	}
+	typ, _ := req.Manifest["type"].(string)
+	name, _ := req.Manifest["name"].(string)
+	if typ != "truefoundry-agent" && typ != "remote-agent/self-hosted" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: AgentManifest : unsupported manifest type %q", typ)})
+		return
+	}
+	if !agentNameRe.MatchString(name) || len(name) > 32 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": `Validation Error: AgentManifest /name: must match pattern "^[a-z](?:[a-z0-9]|-(?!-)){1,30}[a-z0-9]$"`})
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if msg := s.validateAgentManifest(typ, req.Manifest); msg != "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": msg})
+		return
+	}
+	if missing := s.missingAgentMcpServers(req.Manifest); len(missing) > 0 {
+		writeJSON(w, http.StatusNotFound, map[string]string{"message": fmt.Sprintf("MCP server(s) not found: %q", strings.Join(missing, `", "`))})
+		return
+	}
+
+	a, exists := s.agents[name]
+	if !exists {
+		a = &agent{id: "agent-" + strconv.Itoa(s.nextID)}
+		s.nextID++
+	}
+	version := a.latestVersion + 1
+	if !req.DryRun {
+		a.latestVersion = version
+		a.manifest = req.Manifest
+		s.agents[name] = a
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": agentVersionJSON(a.id, name, req.Manifest, version),
+	})
+}
+
+// validateAgentManifest enforces the agent manifest rules derived from the
+// TrueFoundry SDK schemas and dryRun applies against a real control plane.
+func (s *Server) validateAgentManifest(typ string, manifest map[string]any) string {
+	if desc, _ := manifest["description"].(string); desc == "" {
+		return "description is required"
+	}
+	if _, ok := manifest["collaborators"].([]any); !ok {
+		return "collaborators are required"
+	}
+	switch typ {
+	case "truefoundry-agent":
+		model, _ := manifest["model"].(map[string]any)
+		if modelName, _ := model["name"].(string); modelName == "" {
+			return "Validation Error: AgentManifest : must have required property 'model'"
+		}
+		for _, raw := range listOf(manifest, "skills") {
+			skill, _ := raw.(map[string]any)
+			if fqn, _ := skill["fqn"].(string); fqn == "" {
+				return "skills entries require an fqn"
+			}
+		}
+		for _, raw := range listOf(manifest, "mcp_servers") {
+			server, _ := raw.(map[string]any)
+			if serverName, _ := server["name"].(string); serverName == "" {
+				return "mcp_servers entries require a name"
+			}
+		}
+		if format, ok := manifest["response_format"].(map[string]any); ok {
+			switch formatType, _ := format["type"].(string); formatType {
+			case "text", "json_object":
+			case "json_schema":
+				schema, _ := format["json_schema"].(map[string]any)
+				if schemaName, _ := schema["name"].(string); schemaName == "" {
+					return "response_format of type json_schema requires json_schema with a name"
+				}
+			default:
+				return "response_format type must be text, json_schema, or json_object"
+			}
+		}
+	case "remote-agent/self-hosted":
+		if u, _ := manifest["url"].(string); u == "" {
+			return "url is required for a self-hosted remote agent"
+		}
+		framework, ok := manifest["framework"].(map[string]any)
+		if !ok {
+			return "framework is required for a self-hosted remote agent"
+		}
+		switch frameworkType, _ := framework["type"].(string); frameworkType {
+		case "a2a":
+			if p, _ := framework["agent_card_path"].(string); p == "" {
+				return "framework of type a2a requires agent_card_path"
+			}
+		case "custom":
+		default:
+			return "framework type must be a2a or custom"
+		}
+		if auth, ok := manifest["auth_data"].(map[string]any); ok {
+			switch authType, _ := auth["type"].(string); authType {
+			case "passthrough":
+			case "header":
+				if headers, _ := auth["headers"].(map[string]any); len(headers) == 0 {
+					return "auth_data of type header requires headers"
+				}
+			default:
+				return "auth_data type must be header or passthrough"
+			}
+		}
+	}
+	return ""
+}
+
+// missingAgentMcpServers returns the MCP servers referenced by a
+// truefoundry-agent manifest that do not exist. Callers must hold s.mu.
+func (s *Server) missingAgentMcpServers(manifest map[string]any) []string {
+	var missing []string
+	for _, raw := range listOf(manifest, "mcp_servers") {
+		server, _ := raw.(map[string]any)
+		name, _ := server["name"].(string)
+		if _, ok := s.mcpservers[name]; name != "" && !ok {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
+func listOf(manifest map[string]any, key string) []any {
+	list, _ := manifest[key].([]any)
+	return list
+}
+
+// agentVersionJSON renders an AgentVersion response object.
+func agentVersionJSON(agentID, name string, manifest map[string]any, version int) map[string]any {
+	return map[string]any{
+		"id":       fmt.Sprintf("%s-v%d", agentID, version),
+		"agentId":  agentID,
+		"fqn":      fmt.Sprintf("%s:agent:%s:%d", Tenant, name, version),
+		"manifest": manifest,
+		"version":  version,
+		"createdBySubject": map[string]any{
+			"subjectId": "mock-subject", "subjectType": "user", "subjectSlug": "mock-user", "subjectDisplayName": "Mock User",
+		},
+		"createdAt": "2026-07-15T00:00:00Z",
+		"updatedAt": "2026-07-15T00:00:00Z",
+	}
+}
+
+// agentTypeDiscriminator maps a manifest type to the list entry's type field.
+func agentTypeDiscriminator(manifestType string) string {
+	if manifestType == "remote-agent/self-hosted" {
+		return "remote-agent"
+	}
+	return manifestType
+}
+
+// handleListAgents implements GET /api/svc/v1/agents.
+func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
+	nameFilter := r.URL.Query().Get("name")
+	prefixFilter := r.URL.Query().Get("namePrefix")
+	typeFilter := r.URL.Query().Get("type")
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+
+	s.mu.Lock()
+	var items []map[string]any
+	for name, a := range s.agents {
+		manifestType, _ := a.manifest["type"].(string)
+		discriminator := agentTypeDiscriminator(manifestType)
+		if nameFilter != "" && name != nameFilter {
+			continue
+		}
+		if nameFilter == "" && prefixFilter != "" && !strings.HasPrefix(name, prefixFilter) {
+			continue
+		}
+		if typeFilter != "" && discriminator != typeFilter {
+			continue
+		}
+		items = append(items, map[string]any{
+			"id":                   a.id,
+			"name":                 name,
+			"fqn":                  Tenant + ":agent:" + name,
+			"tenantName":           Tenant,
+			"accountId":            "acc-" + Tenant,
+			"latestVersion":        a.latestVersion,
+			"type":                 discriminator,
+			"latestVersionDetails": agentVersionJSON(a.id, name, a.manifest, a.latestVersion),
+			"createdBy":            "mock-user@example.com",
+			"createdAt":            "2026-07-15T00:00:00Z",
+			"updatedAt":            "2026-07-15T00:00:00Z",
+		})
+	}
+	s.mu.Unlock()
+
+	sort.Slice(items, func(i, j int) bool { return items[i]["name"].(string) < items[j]["name"].(string) })
+	total := len(items)
+	if offset > total {
+		offset = total
+	}
+	end := min(offset+limit, total)
+	page := items[offset:end]
+	if page == nil {
+		page = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":       page,
+		"pagination": map[string]int{"total": total, "offset": offset, "limit": limit},
+	})
+}
+
+// handleDeleteAgent implements DELETE /api/svc/v1/agents/{id}.
+func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for name, a := range s.agents {
+		if a.id == r.PathValue("id") {
+			delete(s.agents, name)
+			writeJSON(w, http.StatusOK, map[string]any{})
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"message": "agent not found"})
 }
 
 // applyGatewayConfig stores a tenant-wide gateway config (e.g.
