@@ -31,9 +31,9 @@ Manual end-to-end demo (`examples/demo/main.tf` + `cmd/mock-control-plane` + `de
 
 Three packages, strictly layered:
 
-- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers). Also defines the wire types (snake_case JSON manifests).
+- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers), `PUT/GET /api/svc/v1/agents` + `DELETE /api/svc/v1/agents/{id}` (versioned agent CRUD). Also defines the wire types (snake_case JSON manifests).
 - **`internal/mockcp`** — in-memory mock of that API surface. It is the executable spec of the API contract: unit tests, acceptance tests, and the `cmd/mock-control-plane` demo binary all share it. If you change a manifest field, update its validation too.
-- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config`, `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_virtual_account`; data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
+- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config`, `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_agent` (TrueFoundry-hosted agents), `truefoundry_remote_agent` (self-hosted agents), `truefoundry_virtual_account`; data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
 
 The wire format authority is the manifest schemas in
 [truefoundry-typescript-sdk](https://github.com/truefoundry/truefoundry-typescript-sdk) —
@@ -63,6 +63,19 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   manifest type also exists but is broken on real control planes (instant 500
   "Could not validate for type mcp-server" for any group with integrations) — don't
   use it.
+  **Agents have their own versioned endpoints**: `truefoundry-agent` and
+  `remote-agent/self-hosted` manifests go through `PUT /api/svc/v1/agents`
+  (every apply creates a new immutable version; the response's `data` is the
+  new AgentVersion with `agentId` and a versioned FQN like
+  `tenant:agent:name:3`), are read via `GET /api/svc/v1/agents?name=` (list
+  entries embed the latest version's manifest in `latestVersionDetails`), and
+  deleted via `DELETE /api/svc/v1/agents/{id}`. `terraform import` takes the
+  agent name (the list endpoint filters by name, not FQN). The control plane
+  rejects agents referencing MCP servers that don't exist on the tenant, and
+  enforces the name pattern `^[a-z](?:[a-z0-9]|-(?!-)){1,30}[a-z0-9]$`
+  (verified via dryRun 2026-07-27). The legacy `agent` manifest type and agent
+  skills (ML-repo-backed artifacts, `/api/svc/v1/agent-skill-versions`) are
+  not modeled.
 - **One `truefoundry_provider_account` resource, five provider types** (`openai`, `azure-openai`, `azure-foundry`, `aws-bedrock`, `virtual-model`) with different required-field combinations — notably azure-foundry has *per-model* auth/endpoints and no account-level auth. Account types whose integrations are not models get their own resource (`custom_endpoint_account`, `azure_account`, `slack_account`, `hashicorp_account`, `system_secret_store`) and are listed with their own `?type=` filter (`blob-storage`, `notification-channel`, `secret-store` — the latter shared by hashicorp and truefoundry accounts). In all resources the validation rules live in exactly two places: `ValidateConfig` in the resource (plan-time, attribute-level errors) and `validateManifest` in `mockcp` (mock server-side). Keep them in sync.
 - The control plane verifies integration credentials at apply time for some types (Azure blob storage connection strings, Vault token/AppRole) but not others (Slack webhooks/bots) — `dryRun: true` applies exercise this too.
 - `name` and `provider_type` are `RequiresReplace`; everything else updates in place via re-apply (apply is idempotent, `CREATE` vs `UPDATE`).
