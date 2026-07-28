@@ -31,9 +31,9 @@ Manual end-to-end demo (`examples/demo/main.tf` + `cmd/mock-control-plane` + `de
 
 Three packages, strictly layered:
 
-- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers), `PUT/GET /api/svc/v1/agents` + `DELETE /api/svc/v1/agents/{id}` (versioned agent CRUD), `PUT/GET/DELETE /api/svc/v1/ml-repos` (ML repo CRUD), and the versioned artifact endpoints `PUT /api/svc/v1/agent-skill-versions` + `GET/DELETE /api/svc/v1/agent-skills` and `PUT /api/svc/v1/prompt-versions` + `GET/DELETE /api/svc/v1/prompts`. Also defines the wire types (snake_case JSON manifests).
+- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers), `GET /api/svc/v1/llm-gateway/budgets?type=` (read/list v2 budget rules), `PUT/GET /api/svc/v1/agents` + `DELETE /api/svc/v1/agents/{id}` (versioned agent CRUD), `PUT/GET/DELETE /api/svc/v1/ml-repos` (ML repo CRUD), and the versioned artifact endpoints `PUT /api/svc/v1/agent-skill-versions` + `GET/DELETE /api/svc/v1/agent-skills` and `PUT /api/svc/v1/prompt-versions` + `GET/DELETE /api/svc/v1/prompts`. Also defines the wire types (snake_case JSON manifests).
 - **`internal/mockcp`** — in-memory mock of that API surface. It is the executable spec of the API contract: unit tests, acceptance tests, and the `cmd/mock-control-plane` demo binary all share it. If you change a manifest field, update its validation too.
-- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config`, `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_openapi_mcp_server` (OpenAPI-based MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_agent` (TrueFoundry-hosted agents), `truefoundry_remote_agent` (self-hosted agents), `truefoundry_ml_repo` (artifact containers), `truefoundry_agent_skill` (versioned SKILL.md artifacts), `truefoundry_prompt` (versioned chat_prompt templates), `truefoundry_virtual_account`; data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
+- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config` (budget limiting v1, deprecated), `truefoundry_tenant_budget_config` + `truefoundry_team_budget_config` (budget limiting v2), `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_openapi_mcp_server` (OpenAPI-based MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_agent` (TrueFoundry-hosted agents), `truefoundry_remote_agent` (self-hosted agents), `truefoundry_ml_repo` (artifact containers), `truefoundry_agent_skill` (versioned SKILL.md artifacts), `truefoundry_prompt` (versioned chat_prompt templates), `truefoundry_virtual_account`; data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
 
 The wire format authority is the manifest schemas in
 [truefoundry-typescript-sdk](https://github.com/truefoundry/truefoundry-typescript-sdk) —
@@ -56,6 +56,21 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   **Gateway configs are the exception**: `GET /api/svc/v1/llm-gateway/config/<type>`
   (e.g. `gateway-budget-config`) returns the stored manifest directly, so
   `truefoundry_gateway_budget_config` reads via that endpoint and needs none of the above.
+  **Budget limiting v2 rules are not gateway configs**: `tenant-budget-config` and
+  `team-budget-config` manifests are individually named rules (many per tenant), applied
+  and deleted through the generic manifest endpoints but read via
+  `GET /api/svc/v1/llm-gateway/budgets?type=` — `llm-gateway/config/<type>` returns an
+  empty 200 for them, and the budgets list endpoint honors only the `type` query
+  parameter (`name` is ignored, so match client-side). Verified against a real control
+  plane 2026-07-28: apply honors `dryRun`, the deployed manifest schema is ahead of the
+  published SDK (`when.provider_accounts`, `limits.cost_per_lifetime`, and
+  `alerts.notify_breaching_user` are accepted), unknown manifest fields pass through
+  unvalidated, the rule name pattern is `^[a-zA-Z](?:[a-zA-Z0-9\-]{0,60}[a-zA-Z0-9])$`
+  (upper case allowed, unlike other manifests), and `team_name` is checked against real
+  teams (`400 "Invalid team id"`). Per the docs `applies_to.type` cannot change after
+  creation, so it is `RequiresReplace` along with `name`/`team_name`. v1 stops working
+  after 15 Aug 2026; `truefoundry_gateway_budget_config` carries a `DeprecationMessage`
+  and the README has the field-by-field migration table.
   **MCP servers too**: standalone `mcp-server/remote` / `mcp-server/openapi` / `mcp-server/virtual` manifests
   (not provider-account integrations) are read via `GET /api/svc/v1/mcp-servers?fqn=`.
   Their apply response carries no `data.id`, so the resources read the ID back from

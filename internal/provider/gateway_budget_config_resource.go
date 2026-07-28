@@ -84,11 +84,18 @@ func (r *gatewayBudgetConfigResource) Metadata(_ context.Context, req resource.M
 
 func (r *gatewayBudgetConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		DeprecationMessage: "Budget limiting v1 stops working after 15 Aug 2026. Migrate each rule to a " +
+			"truefoundry_tenant_budget_config or truefoundry_team_budget_config resource (budget limiting v2).",
 		Description: "Manages the AI gateway budget configuration: spend and token limits applied to matching " +
 			"requests, with optional alerting. Applied as a `gateway-budget-config` manifest via `PUT /api/svc/v1/apply`. " +
 			"**The budget config is a tenant-wide singleton** — define at most one of this resource per control plane; " +
 			"an apply replaces all budget rules. Import the existing config with " +
-			"`terraform import truefoundry_gateway_budget_config.example gateway-budget-config`.",
+			"`terraform import truefoundry_gateway_budget_config.example gateway-budget-config`.\n\n" +
+			"~> **Deprecated — budget limiting v1.** The control plane stops enforcing these rules after 15 Aug 2026. " +
+			"Replace each rule with a `truefoundry_tenant_budget_config` (or `truefoundry_team_budget_config`) resource. " +
+			"Note the semantic differences: v2 rules are order-independent and all matching rules apply, `audit_mode` " +
+			"becomes `mode`, `budget_applies_per` becomes `applies_to`, one `unit`/`limit_to` pair becomes a `limits` " +
+			"block that can set several periods at once, and token-based units have no v2 equivalent.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,
