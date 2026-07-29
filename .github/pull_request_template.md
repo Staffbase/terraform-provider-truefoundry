@@ -39,4 +39,5 @@
 - [ ] Validation kept in sync between the resource's `ValidateConfig` and
       `mockcp.validateManifest`
 - [ ] README / AGENTS.md updated if behaviour or API contract knowledge changed
+- [ ] Commits follow Conventional Commits (`feat(DEVS-123): …`) — CI checks this
 - [ ] Labelled for release-drafter

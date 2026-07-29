@@ -55,6 +55,44 @@ jobs:
           make docs
           git diff --exit-code
 
+  commits:
+    name: Commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Conventional Commits, see AGENTS.md "Commits". Merge commits are
+      # exempt — GitHub writes those subjects, not us.
+      - name: Check commit messages
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(feat|fix|chore|ci|docs|refactor|test|perf|build|style|revert)(\([A-Za-z0-9._/-]+\))?!?: .+'
+          status=0
+          while IFS= read -r subject; do
+            [ -z "$subject" ] && continue
+            if ! printf '%s' "$subject" | grep -qE "$pattern"; then
+              echo "::error::not a conventional commit: $subject"
+              status=1
+            elif [ "${#subject}" -gt 100 ]; then
+              echo "::error::commit header longer than 100 characters: $subject"
+              status=1
+            fi
+          done < <(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")
+          if [ "$status" -ne 0 ]; then
+            echo "Expected: type(optional-scope)!: subject — e.g. feat(DEVS-1432): add x"
+            exit 1
+          fi
+          echo "All commit messages OK"
+
   auto-merge:
     needs: [test]
     uses: Staffbase/gha-workflows/.github/workflows/template_automerge_dependabot.yml@v15.1.1
