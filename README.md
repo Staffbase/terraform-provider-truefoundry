@@ -158,6 +158,7 @@ terraform import truefoundry_team_budget_config.platform platform-per-user
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
+terraform import truefoundry_gateway_rate_limiting_config.limits gateway-rate-limiting-config
 terraform import truefoundry_gateway_global_settings.settings gateway-global-settings
 ```
 
@@ -195,6 +196,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_data_access_config`](docs/resources/gateway_data_access_config.md),
 [`truefoundry_gateway_data_routing_config`](docs/resources/gateway_data_routing_config.md),
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
+[`truefoundry_gateway_rate_limiting_config`](docs/resources/gateway_rate_limiting_config.md),
 [`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_mcp_server`](docs/resources/mcp_server.md),
@@ -242,9 +244,13 @@ make docs-check  # validate
   `truefoundry_team_budget_config`), data access config
   (`truefoundry_gateway_data_access_config`), data routing
   config (`truefoundry_gateway_data_routing_config`), guardrails config
-  (`truefoundry_gateway_guardrails_config`), and global settings
+  (`truefoundry_gateway_guardrails_config`), rate limiting config
+  (`truefoundry_gateway_rate_limiting_config`), and global settings
   (`truefoundry_gateway_global_settings`) are modeled. Other gateway configs
-  (rate limiting, fallback, load balancing, OTel) are not.
+  (fallback, load balancing, OTel) are not. The rate limiting rule matcher
+  models the `subjects`, `models`, and `metadata` filters of the SDK schema;
+  the control plane accepts unknown `when` fields without validating them, so
+  no undocumented filters are exposed.
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
