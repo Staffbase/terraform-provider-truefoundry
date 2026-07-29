@@ -115,6 +115,28 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
 
 Fetch the account/model manifest shapes from the TypeScript SDK serialization files, then touch: `providerTypeValues` + schema attributes + `ValidateConfig` + `manifestFromModel`/`integrationToModel` (resource), wire structs (`client`), `validateManifest` (`mockcp`), an acceptance-test lifecycle + validation cases, and an example.
 
+## Commits
+
+Every commit message follows [Conventional Commits](https://www.conventionalcommits.org/),
+scoped with the ticket where one exists:
+
+```
+feat(DEVS-1432): add budget limiting v2 resources
+chore(deps): bump golang.org/x/net from 0.54.0 to 0.55.0
+fix: stop diffing pure reorderings of unordered collections
+```
+
+Format: `type(optional-scope)!: subject`, header ≤ 100 characters. Allowed
+types: `feat`, `fix`, `chore`, `ci`, `docs`, `refactor`, `test`, `perf`,
+`build`, `style`, `revert`. The CI `Commit messages` job checks every
+non-merge commit on a pull request and fails on a violation.
+
+The prefix is a convention for readable history only — the release version
+and the changelog come from **PR labels** (table below), not from commit
+messages. So `feat:` on a commit does not bump the minor version, and a
+`!`/`BREAKING CHANGE` footer does nothing on its own: label the PR
+`breaking` as well.
+
 ## Pull requests
 
 Open PRs as drafts (`gh pr create --draft`) and fill in
