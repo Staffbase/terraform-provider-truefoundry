@@ -1,5 +1,7 @@
 # Providers are consumed with semver constraints (e.g. `~> 0.1`), so unlike
 # the calver used by service repos, the version is resolved from PR labels.
+# `major`/`minor`/`patch` are the org-wide labels and act as aliases for the
+# semantic ones. See AGENTS.md "Pull requests" for when to use which.
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 
@@ -7,25 +9,45 @@ version-resolver:
   major:
     labels:
       - "breaking"
+      - "major"
   minor:
     labels:
       - "feature"
       - "enhancement"
+      - "minor"
+  patch:
+    labels:
+      - "fix"
+      - "bug"
+      - "chore"
+      - "dependencies"
+      - "documentation"
+      - "patch"
   default: patch
 
 categories:
+  # First match wins, so `breaking` outranks the rest.
+  - title: "💥 Breaking Changes"
+    labels:
+      - "breaking"
+      - "major"
   - title: "🚀 Features"
     labels:
       - "feature"
       - "enhancement"
+      - "minor"
   - title: "🐛 Bug Fixes"
     labels:
       - "fix"
       - "bug"
+  - title: "📖 Documentation"
+    labels:
+      - "documentation"
   - title: "🧰 Maintenance"
     labels:
       - "chore"
       - "dependencies"
+      - "patch"
 
 exclude-labels:
   - "skip-changelog"

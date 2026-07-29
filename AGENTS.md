@@ -115,6 +115,48 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
 
 Fetch the account/model manifest shapes from the TypeScript SDK serialization files, then touch: `providerTypeValues` + schema attributes + `ValidateConfig` + `manifestFromModel`/`integrationToModel` (resource), wire structs (`client`), `validateManifest` (`mockcp`), an acceptance-test lifecycle + validation cases, and an example.
 
+## Pull requests
+
+Open PRs as drafts (`gh pr create --draft`) and fill in
+[`.github/pull_request_template.md`](.github/pull_request_template.md) — goal,
+what changed, how to review, Terraform impact, checklist. Keep the description
+under 200 words and never list changed files; GitHub shows those already.
+
+**Every PR needs a label.** Unlike the calver service repos, this provider is
+consumed with semver constraints (`~> 0.2`), so
+[release-drafter](.github/release-drafter.yml) resolves the next version *and*
+the changelog section purely from PR labels — an unlabelled PR silently lands in
+no changelog section and only bumps the patch version.
+
+| Label                              | Version bump | Changelog section    |
+| ---------------------------------- | ------------ | -------------------- |
+| `breaking`, `major`                | major        | 💥 Breaking Changes  |
+| `feature`, `enhancement`, `minor`  | minor        | 🚀 Features          |
+| `fix`, `bug`                       | patch        | 🐛 Bug Fixes         |
+| `documentation`                    | patch        | 📖 Documentation     |
+| `chore`, `dependencies`, `patch`   | patch        | 🧰 Maintenance       |
+| `skip-changelog`                   | patch        | excluded             |
+
+`major`/`minor`/`patch` are the org-wide labels and behave as aliases for the
+semantic ones. The first matching category wins, so a PR labelled both
+`breaking` and `feature` lands under 💥 Breaking Changes.
+
+Choosing the label is a judgement about the *practitioner-visible Terraform
+surface*, not about the size of the diff:
+
+- `breaking` — renamed/removed attribute or resource, a new required field, a
+  changed default, or anything that makes an existing configuration fail or
+  forces replacement of existing resources.
+- `feature`/`enhancement` — new resource, data source, provider type, or a new
+  optional attribute.
+- `fix`/`bug` — wrong wire format, drift that is not detected, a crash, a
+  validation rule that rejects valid configuration.
+- `documentation` — README, AGENTS.md, examples, regenerated `docs/`.
+- `chore`/`dependencies` — refactors, tests, CI, dependency bumps.
+- `skip-changelog` — nothing a provider consumer would care about.
+
+Cutting the actual release is described in [RELEASING.md](RELEASING.md).
+
 ## Documentation workflow
 
 `docs/` is **generated** — never hand-edit it. Source of truth is the schema `Description` fields and the snippets in `examples/{provider,resources,data-sources}/` (tfplugindocs' expected layout; `examples/demo/` is not part of docs). After changing either, run `make docs` and commit the regenerated markdown.
