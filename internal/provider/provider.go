@@ -111,6 +111,8 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newHashicorpAccountResource,
 		newSystemSecretStoreResource,
 		newGatewayBudgetConfigResource,
+		newTenantBudgetConfigResource,
+		newTeamBudgetConfigResource,
 		newGatewayDataAccessConfigResource,
 		newGatewayDataRoutingConfigResource,
 		newGatewayGuardrailsConfigResource,

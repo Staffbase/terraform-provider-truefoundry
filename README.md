@@ -6,9 +6,9 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
 - **Model access** — provider accounts (OpenAI, Azure OpenAI, Azure AI Foundry,
   AWS Bedrock, virtual models) and the models exposed through them, plus custom
   endpoint accounts for arbitrary HTTP services proxied by the gateway.
-- **Gateway configuration** — budgets, data access, data routing, guardrail
-  wiring, and global settings, plus guardrail groups (Azure Prompt Shield and
-  Content Safety).
+- **Gateway configuration** — budgets (v2 tenant and team rules), data access,
+  data routing, guardrail wiring, and global settings, plus guardrail groups
+  (Azure Prompt Shield and Content Safety).
 - **Platform integrations** — Azure blob storage, Slack notification channels,
   HashiCorp Vault secret stores, and the built-in system secret store.
 - **Agents** — TrueFoundry-hosted agents (model, instructions, skills, MCP
@@ -107,13 +107,54 @@ documentation page.
   resources and `truefoundry_gateway_global_settings` are tenant-wide
   singletons: define at most one of each per control plane, and an apply
   replaces the entire rule set or settings manifest. If a config already exists
-  on the tenant, import it before the first apply.
+  on the tenant, import it before the first apply. Budget rules are the
+  exception — see [Budget limiting v2](#budget-limiting-v2).
 - **Hand tokens to consumers via a secret store.** A virtual account's token is
   stored in the Terraform state; prefer `secret_store_config` to sync it into
   Vault instead of wiring the sensitive `token` attribute through outputs.
 - **Check the limitations before importing.** Only manage pre-existing
   resources whose features this provider models — see
   [Known limitations](#known-limitations).
+
+## Budget limiting v2
+
+TrueFoundry deprecated budget limiting v1: the control plane stops enforcing
+`gateway-budget-config` rules **after 15 Aug 2026**. Both versions run in
+parallel until then, and a request is checked against the matching rules of
+both.
+
+`truefoundry_gateway_budget_config` (v1, deprecated) is a tenant-wide singleton
+holding all rules. Its replacements are one resource per rule:
+`truefoundry_tenant_budget_config` and `truefoundry_team_budget_config`
+(scoped to one team, with RBAC on `team_name`).
+
+Migrating a rule:
+
+| v1 | v2 |
+| --- | --- |
+| `rules[*].id` | `name` of the resource (letters, digits, hyphens; may contain upper case) |
+| `audit_mode = true` | `mode = "audit"` (`enforce` blocks, `audit` only tracks) |
+| `limit_to` + `unit` | a `limits` block; several periods can be set at once, and `cost_per_lifetime` is new (it cannot be combined with the resetting periods) |
+| `unit = "tokens_per_*"` | no equivalent — v2 is cost-based only |
+| `budget_applies_per = ["user"]` | `applies_to = { type = "per-user" }`, also `per-model`, `per-virtual-account`, `metadata`, or `aggregate` |
+| per-entity exceptions as extra rules | `applies_to.overrides` |
+| `when.subjects = ["user:a@example.com"]` | `when.subjects.users = { in = ["a@example.com"] }`, plus `teams` / `virtual_accounts`, each with `in` / `not_in` |
+| `when.models`, `when.metadata` | `when.models`, `when.metadata.<key>`, and the new `when.provider_accounts`, all `in` / `not_in` |
+| `alerts.notification_targets` | unchanged, plus `alerts.notify_breaching_user` |
+
+Two behavioral differences matter when porting rules:
+
+- **Order no longer decides.** In v1 the first matching rule won; in v2 every
+  matching rule is evaluated and the request is blocked if any of them is over
+  budget. Re-express a v1 exemption as a `not_in` filter on the default rule or
+  as an `applies_to.overrides` entry, not as a rule listed earlier.
+- **Counting starts at creation.** A new rule does not retroactively count
+  spend from earlier in the current period.
+
+The control plane rejects changes to `applies_to.type` after a rule is created,
+so this provider replaces the rule instead; `name` and `team_name` behave the
+same way. Run the v2 rules in `mode = "audit"` for a full budget period before
+switching to `enforce` and removing the v1 config.
 
 ## Importing existing resources
 
@@ -140,6 +181,8 @@ terraform import truefoundry_agent_skill.writing ticket-writing
 terraform import truefoundry_prompt.triage ticket-triage
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
+terraform import truefoundry_tenant_budget_config.cluster cluster-daily-cap
+terraform import truefoundry_team_budget_config.platform platform-per-user
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
@@ -175,6 +218,8 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_hashicorp_account`](docs/resources/hashicorp_account.md),
 [`truefoundry_system_secret_store`](docs/resources/system_secret_store.md),
 [`truefoundry_gateway_budget_config`](docs/resources/gateway_budget_config.md),
+[`truefoundry_tenant_budget_config`](docs/resources/tenant_budget_config.md),
+[`truefoundry_team_budget_config`](docs/resources/team_budget_config.md),
 [`truefoundry_gateway_data_access_config`](docs/resources/gateway_data_access_config.md),
 [`truefoundry_gateway_data_routing_config`](docs/resources/gateway_data_routing_config.md),
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
@@ -220,14 +265,14 @@ make docs-check  # validate
   are modeled. Azure accounts can also hold AKS, container registry, key vault,
   and repos integrations — **do not manage a pre-existing Azure account that
   uses them**, an apply would strip them from its manifest.
-- Gateway configs: the budget config (`truefoundry_gateway_budget_config`),
-  data access config (`truefoundry_gateway_data_access_config`), data routing
+- Gateway configs: the v1 budget config (`truefoundry_gateway_budget_config`,
+  deprecated), the v2 budget rules (`truefoundry_tenant_budget_config`,
+  `truefoundry_team_budget_config`), data access config
+  (`truefoundry_gateway_data_access_config`), data routing
   config (`truefoundry_gateway_data_routing_config`), guardrails config
   (`truefoundry_gateway_guardrails_config`), and global settings
   (`truefoundry_gateway_global_settings`) are modeled. Other gateway configs
-  (rate limiting, fallback, load balancing, OTel) and the
-  newer tenant/team budget configs (`tenant-budget-config`,
-  `team-budget-config`) are not.
+  (rate limiting, fallback, load balancing, OTel) are not.
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
