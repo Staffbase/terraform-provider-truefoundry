@@ -2,7 +2,7 @@
 page_title: "Migrating to budget limiting v2"
 subcategory: ""
 description: |-
-  Port gateway_budget_config rules to tenant_budget_config and team_budget_config before the control plane stops enforcing v1 on 15 Aug 2026.
+  Port truefoundry_gateway_budget_config rules to truefoundry_tenant_budget_config and truefoundry_team_budget_config before the control plane stops enforcing budget limiting v1 on 15 Aug 2026.
 ---
 
 # Migrating to budget limiting v2
