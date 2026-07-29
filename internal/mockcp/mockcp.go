@@ -344,7 +344,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // isGatewayConfigType reports whether typ is a tenant-wide gateway config
 // manifest type the mock models.
 func isGatewayConfigType(typ string) bool {
-	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings" || typ == "gateway-rate-limiting-config" || typ == "gateway-load-balancing-config"
+	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings" || typ == "gateway-rate-limiting-config" || typ == "gateway-load-balancing-config" || typ == "gateway-otel-config"
 }
 
 // isMcpServerType reports whether typ is a standalone MCP server manifest
@@ -839,9 +839,9 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 // applyGatewayConfig stores a tenant-wide gateway config (e.g.
 // "gateway-budget-config") keyed by its manifest type.
 func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
-	// gateway-global-settings is the one gateway config manifest without a
-	// name field.
-	if typ != "gateway-global-settings" && (len(name) < 3 || len(name) > 32) {
+	// gateway-global-settings and gateway-otel-config are the gateway config
+	// manifests without a name field.
+	if typ != "gateway-global-settings" && typ != "gateway-otel-config" && (len(name) < 3 || len(name) > 32) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name must be 3-32 characters"})
 		return
 	}
@@ -861,6 +861,8 @@ func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, man
 		msg = validateGatewayLoadBalancingConfig(manifest)
 	case "gateway-global-settings":
 		msg = validateGatewayGlobalSettings(manifest)
+	case "gateway-otel-config":
+		msg = validateGatewayOtelConfig(manifest)
 	}
 	if msg != "" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": msg})
@@ -1303,6 +1305,60 @@ func validateGatewayLoadBalancingConfig(manifest map[string]any) string {
 		}
 	}
 	return ""
+}
+
+// validateGatewayOtelConfig enforces the exporter shape derived from the
+// TrueFoundry SDK's GatewayOtelConfig schemas plus the encoding vocabulary a
+// deployed control plane enforces.
+func validateGatewayOtelConfig(manifest map[string]any) string {
+	if name, _ := manifest["name"].(string); name != "" {
+		return "gateway-otel-config has no name field"
+	}
+	validEncodings := map[string]bool{"proto": true, "json": true}
+	validate := func(key string, tracesOnly bool) string {
+		raw, ok := manifest[key]
+		if !ok {
+			return ""
+		}
+		m, ok := raw.(map[string]any)
+		if !ok {
+			return key + " must be an object"
+		}
+		typ, _ := m["type"].(string)
+		if typ != "http" && typ != "grpc" {
+			return fmt.Sprintf("unknown exporter type %q", typ)
+		}
+		if endpoint, _ := m["endpoint"].(string); endpoint == "" {
+			return "endpoint is required on exporters"
+		}
+		encoding, hasEncoding := m["encoding"].(string)
+		switch typ {
+		case "http":
+			if !hasEncoding {
+				return "encoding is required on http exporters"
+			}
+			if !validEncodings[encoding] {
+				return fmt.Sprintf("Validation Error: GatewayConfig /%s/encoding: must be equal to one of the allowed values (got %q)", key, encoding)
+			}
+		case "grpc":
+			if hasEncoding {
+				return "encoding is not valid on grpc exporters"
+			}
+		}
+		if tracesOnly {
+			return ""
+		}
+		for _, field := range []string{"additional_resource_attributes", "exclude_request_data", "when"} {
+			if _, ok := m[field]; ok {
+				return fmt.Sprintf("%s is only valid on the traces exporter", field)
+			}
+		}
+		return ""
+	}
+	if msg := validate("otel_traces_exporter_config", true); msg != "" {
+		return msg
+	}
+	return validate("otel_metrics_exporter_config", false)
 }
 
 // validateGatewayGlobalSettings enforces the manifest shape derived from the
