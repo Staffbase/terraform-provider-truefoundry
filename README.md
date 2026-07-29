@@ -119,42 +119,14 @@ documentation page.
 ## Budget limiting v2
 
 TrueFoundry deprecated budget limiting v1: the control plane stops enforcing
-`gateway-budget-config` rules **after 15 Aug 2026**. Both versions run in
-parallel until then, and a request is checked against the matching rules of
-both.
+`gateway-budget-config` rules **after 15 Aug 2026**.
+`truefoundry_gateway_budget_config` (v1, deprecated, a tenant-wide singleton
+holding all rules) is replaced by one resource per rule:
+`truefoundry_tenant_budget_config` and `truefoundry_team_budget_config`.
 
-`truefoundry_gateway_budget_config` (v1, deprecated) is a tenant-wide singleton
-holding all rules. Its replacements are one resource per rule:
-`truefoundry_tenant_budget_config` and `truefoundry_team_budget_config`
-(scoped to one team, with RBAC on `team_name`).
-
-Migrating a rule:
-
-| v1 | v2 |
-| --- | --- |
-| `rules[*].id` | `name` of the resource (letters, digits, hyphens; may contain upper case) |
-| `audit_mode = true` | `mode = "audit"` (`enforce` blocks, `audit` only tracks) |
-| `limit_to` + `unit` | a `limits` block; several periods can be set at once, and `cost_per_lifetime` is new (it cannot be combined with the resetting periods) |
-| `unit = "tokens_per_*"` | no equivalent — v2 is cost-based only |
-| `budget_applies_per = ["user"]` | `applies_to = { type = "per-user" }`, also `per-model`, `per-virtual-account`, `metadata`, or `aggregate` |
-| per-entity exceptions as extra rules | `applies_to.overrides` |
-| `when.subjects = ["user:a@example.com"]` | `when.subjects.users = { in = ["a@example.com"] }`, plus `teams` / `virtual_accounts`, each with `in` / `not_in` |
-| `when.models`, `when.metadata` | `when.models`, `when.metadata.<key>`, and the new `when.provider_accounts`, all `in` / `not_in` |
-| `alerts.notification_targets` | unchanged, plus `alerts.notify_breaching_user` |
-
-Two behavioral differences matter when porting rules:
-
-- **Order no longer decides.** In v1 the first matching rule won; in v2 every
-  matching rule is evaluated and the request is blocked if any of them is over
-  budget. Re-express a v1 exemption as a `not_in` filter on the default rule or
-  as an `applies_to.overrides` entry, not as a rule listed earlier.
-- **Counting starts at creation.** A new rule does not retroactively count
-  spend from earlier in the current period.
-
-The control plane rejects changes to `applies_to.type` after a rule is created,
-so this provider replaces the rule instead; `name` and `team_name` behave the
-same way. Run the v2 rules in `mode = "audit"` for a full budget period before
-switching to `enforce` and removing the v1 config.
+The field-by-field mapping, the two behavioral differences that matter when
+porting rules, and a rollout order are in the
+[migration guide](docs/guides/budget-limiting-v2.md).
 
 ## Importing existing resources
 

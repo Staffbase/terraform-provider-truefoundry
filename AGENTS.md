@@ -181,4 +181,26 @@ Cutting the actual release is described in [RELEASING.md](RELEASING.md).
 
 ## Documentation workflow
 
-`docs/` is **generated** — never hand-edit it. Source of truth is the schema `Description` fields and the snippets in `examples/{provider,resources,data-sources}/` (tfplugindocs' expected layout; `examples/demo/` is not part of docs). After changing either, run `make docs` and commit the regenerated markdown.
+`docs/` is **generated** — never hand-edit it. Source of truth is the schema `Description` fields, the templates in `templates/`, and the snippets in `examples/{provider,resources,data-sources}/` (tfplugindocs' expected layout; `examples/demo/` is not part of docs). After changing either, run `make docs` and commit the regenerated markdown.
+
+### Where prose belongs
+
+- **Schema `Description`** — anything about one resource or attribute. It is
+  the only place a practitioner sees inside `terraform providers schema` and on
+  the resource doc page.
+- **`templates/guides/<topic>.md.tmpl`** → generated to `docs/guides/` — a
+  topic that spans several resources and has a start and an end: migrations
+  (e.g. [budget limiting v2](templates/guides/budget-limiting-v2.md.tmpl)),
+  multi-resource workflows, deprecation walkthroughs. Guides need
+  `page_title` / `subcategory` / `description` frontmatter, and links to
+  resource pages are relative (`../resources/foo.md`). Keep the README to a
+  short summary plus a link to the guide — the guide is versioned with the
+  provider and sits next to the resource docs, the README is not.
+- **`README.md`** — what the provider is, getting started, best practices,
+  import syntax, known limitations. Not migration walkthroughs.
+- **There is no `CHANGELOG.md` and no `UPGRADE.md`.** Per-version notes come
+  from [release-drafter](.github/release-drafter.yml) via PR labels and live in
+  the GitHub release; a hand-maintained changelog would duplicate and drift
+  from it. A breaking provider change is explained in its PR description, its
+  release note, and — when practitioners have to rewrite configuration — a
+  guide.
