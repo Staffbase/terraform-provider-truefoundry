@@ -15,11 +15,14 @@ AI Gateway resources on a TrueFoundry control plane:
   exposed through them, plus [custom endpoint accounts](resources/custom_endpoint_account.md)
   for arbitrary HTTP services proxied by the gateway. The
   [models data source](data-sources/models.md) lists everything on the gateway.
-- **Gateway configuration** — tenant-wide singletons for
-  [budgets](resources/gateway_budget_config.md),
-  [data access](resources/gateway_data_access_config.md),
+- **Gateway configuration** — budget rules
+  ([tenant](resources/tenant_budget_config.md) and
+  [team](resources/team_budget_config.md) scoped; the
+  [deprecated v1 config](resources/gateway_budget_config.md) has a
+  [migration guide](guides/budget-limiting-v2.md)), plus the tenant-wide
+  singletons for [data access](resources/gateway_data_access_config.md),
   [data routing](resources/gateway_data_routing_config.md), and
-  [guardrail wiring](resources/gateway_guardrails_config.md), plus
+  [guardrail wiring](resources/gateway_guardrails_config.md), and
   [guardrail groups](resources/guardrail_group.md) (Azure Prompt Shield and
   Content Safety).
 - **Platform integrations** — [Azure blob storage](resources/azure_account.md),
