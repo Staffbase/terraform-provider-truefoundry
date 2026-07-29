@@ -102,21 +102,6 @@ type routingModel struct {
 	Targets []routingTargetModel `tfsdk:"targets"`
 }
 
-type routingTargetModel struct {
-	Target              types.String            `tfsdk:"target"`
-	Weight              types.Float64           `tfsdk:"weight"`
-	Priority            types.Int64             `tfsdk:"priority"`
-	FallbackStatusCodes []types.String          `tfsdk:"fallback_status_codes"`
-	FallbackCandidate   types.Bool              `tfsdk:"fallback_candidate"`
-	MetadataMatch       map[string]types.String `tfsdk:"metadata_match"`
-	HeadersOverride     *headersOverrideModel   `tfsdk:"headers_override"`
-}
-
-type headersOverrideModel struct {
-	Remove []types.String          `tfsdk:"remove"`
-	Set    map[string]types.String `tfsdk:"set"`
-}
-
 type costModel struct {
 	Metric     types.String  `tfsdk:"metric"`
 	Value      types.Float64 `tfsdk:"value"`
@@ -312,50 +297,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 									Description: "Target models routed to. `weight` is required for weight-based routing, `priority` for priority-based routing.",
 									Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 									NestedObject: schema.NestedAttributeObject{
-										Attributes: map[string]schema.Attribute{
-											"target": schema.StringAttribute{
-												Required:    true,
-												Description: "Target model as `<provider-account>/<model-name>`.",
-											},
-											"weight": schema.Float64Attribute{
-												Optional:    true,
-												Description: "Relative routing weight; higher values receive more traffic (weight-based routing).",
-											},
-											"priority": schema.Int64Attribute{
-												Optional:    true,
-												Description: "Priority of the target; 0 is highest (priority-based routing).",
-											},
-											"fallback_status_codes": schema.SetAttribute{
-												Optional:    true,
-												ElementType: types.StringType,
-												Description: "Status codes for which the request falls back to other targets.",
-											},
-											"fallback_candidate": schema.BoolAttribute{
-												Optional:    true,
-												Description: "Whether this target may serve as a fallback for other targets.",
-											},
-											"metadata_match": schema.MapAttribute{
-												Optional:    true,
-												ElementType: types.StringType,
-												Description: "Metadata key-value pairs that must match incoming request metadata headers for this target to be considered.",
-											},
-											"headers_override": schema.SingleNestedAttribute{
-												Optional:    true,
-												Description: "Headers to remove from or set on the upstream request for this target.",
-												Attributes: map[string]schema.Attribute{
-													"remove": schema.SetAttribute{
-														Optional:    true,
-														ElementType: types.StringType,
-														Description: "Headers to remove from the upstream request.",
-													},
-													"set": schema.MapAttribute{
-														Optional:    true,
-														ElementType: types.StringType,
-														Description: "Headers to add or overwrite on the upstream request.",
-													},
-												},
-											},
-										},
+										Attributes: routingTargetAttributes(),
 									},
 								},
 							},
@@ -752,38 +694,7 @@ func manifestFromModel(m *providerAccountModel) client.ProviderAccountManifest {
 				LoadBalanceTargets: []client.RoutingTarget{},
 			}
 			for _, t := range model.Routing.Targets {
-				target := client.RoutingTarget{
-					Target:   t.Target.ValueString(),
-					Weight:   float64OrNil(t.Weight),
-					Priority: int64OrNil(t.Priority),
-				}
-				if !t.FallbackCandidate.IsNull() {
-					v := t.FallbackCandidate.ValueBool()
-					target.FallbackCandidate = &v
-				}
-				for _, c := range t.FallbackStatusCodes {
-					target.FallbackStatusCodes = append(target.FallbackStatusCodes, c.ValueString())
-				}
-				if len(t.MetadataMatch) > 0 {
-					target.MetadataMatch = map[string]string{}
-					for k, v := range t.MetadataMatch {
-						target.MetadataMatch[k] = v.ValueString()
-					}
-				}
-				if t.HeadersOverride != nil {
-					override := &client.HeadersOverride{}
-					for _, h := range t.HeadersOverride.Remove {
-						override.Remove = append(override.Remove, h.ValueString())
-					}
-					if len(t.HeadersOverride.Set) > 0 {
-						override.Set = map[string]string{}
-						for k, v := range t.HeadersOverride.Set {
-							override.Set[k] = v.ValueString()
-						}
-					}
-					target.HeadersOverride = override
-				}
-				routing.LoadBalanceTargets = append(routing.LoadBalanceTargets, target)
+				routing.LoadBalanceTargets = append(routing.LoadBalanceTargets, routingTargetFromModel(t))
 			}
 			integration.RoutingConfig = routing
 		}
@@ -833,39 +744,7 @@ func integrationToModel(manifest client.ModelIntegration, stateAPIKey types.Stri
 	if manifest.RoutingConfig != nil {
 		routing := &routingModel{Type: types.StringValue(manifest.RoutingConfig.Type)}
 		for _, t := range manifest.RoutingConfig.LoadBalanceTargets {
-			target := routingTargetModel{
-				Target:   types.StringValue(t.Target),
-				Weight:   float64OrNull(t.Weight),
-				Priority: int64OrNull(t.Priority),
-			}
-			if t.FallbackCandidate != nil {
-				target.FallbackCandidate = types.BoolValue(*t.FallbackCandidate)
-			} else {
-				target.FallbackCandidate = types.BoolNull()
-			}
-			for _, c := range t.FallbackStatusCodes {
-				target.FallbackStatusCodes = append(target.FallbackStatusCodes, types.StringValue(c))
-			}
-			if len(t.MetadataMatch) > 0 {
-				target.MetadataMatch = map[string]types.String{}
-				for k, v := range t.MetadataMatch {
-					target.MetadataMatch[k] = types.StringValue(v)
-				}
-			}
-			if t.HeadersOverride != nil {
-				override := &headersOverrideModel{}
-				for _, h := range t.HeadersOverride.Remove {
-					override.Remove = append(override.Remove, types.StringValue(h))
-				}
-				if len(t.HeadersOverride.Set) > 0 {
-					override.Set = map[string]types.String{}
-					for k, v := range t.HeadersOverride.Set {
-						override.Set[k] = types.StringValue(v)
-					}
-				}
-				target.HeadersOverride = override
-			}
-			routing.Targets = append(routing.Targets, target)
+			routing.Targets = append(routing.Targets, routingTargetToModel(t))
 		}
 		m.Routing = routing
 	}
