@@ -1247,7 +1247,11 @@ var loadBalancingRuleIDRe = regexp.MustCompile(`^[a-zA-Z](?:[a-zA-Z0-9\-]{0,60}[
 
 // validateGatewayLoadBalancingConfig enforces the load balancing rule shape
 // derived from the TrueFoundry SDK's LoadBalancingConfig schemas plus the rule
-// id pattern a deployed control plane enforces.
+// id pattern a deployed control plane enforces. The weight/priority checks
+// mirror the real control plane, which rejects a weight-based target without
+// `weight` and a priority-based one without `priority`. It does not reject the
+// converse (a `weight` on a priority- or latency-based target), so neither
+// does this mock — that rule lives in the resource's ValidateConfig only.
 func validateGatewayLoadBalancingConfig(manifest map[string]any) string {
 	validTypes := map[string]bool{
 		"weight-based-routing": true, "latency-based-routing": true, "priority-based-routing": true,

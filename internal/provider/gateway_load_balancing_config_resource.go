@@ -96,9 +96,11 @@ func (r *gatewayLoadBalancingConfigResource) Schema(_ context.Context, _ resourc
 				},
 			},
 			"rules": schema.SetNestedAttribute{
-				Required:    true,
-				Description: "Load balancing rules. The first matching rule routes the request; order is not significant.",
-				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
+				Required: true,
+				Description: "Load balancing rules, normally scoped so that at most one matches a given request. " +
+					"This is a set: the order rules are written in carries no meaning, and which rule wins when " +
+					"several match is up to the control plane.",
+				Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"id": schema.StringAttribute{
@@ -113,7 +115,9 @@ func (r *gatewayLoadBalancingConfigResource) Schema(_ context.Context, _ resourc
 							Required: true,
 							Description: fmt.Sprintf("Routing strategy. One of: `%s`. `weight-based-routing` needs a `weight` on every "+
 								"target, `priority-based-routing` a `priority`; `latency-based-routing` takes neither and picks the "+
-								"fastest target.", strings.Join(loadBalancingTypeValues, "`, `")),
+								"fastest target. The control plane ignores a `weight` or `priority` its strategy does not use, so "+
+								"this provider rejects that combination at plan time rather than applying a value that has no effect.",
+								strings.Join(loadBalancingTypeValues, "`, `")),
 							Validators: []validator.String{stringvalidator.OneOf(loadBalancingTypeValues...)},
 						},
 						"when": schema.SingleNestedAttribute{
@@ -168,8 +172,12 @@ func (r *gatewayLoadBalancingConfigResource) Configure(_ context.Context, req re
 }
 
 // ValidateConfig enforces unique rule IDs, well-formed model references, and
-// the per-strategy target fields. The control plane accepts a target without
-// the field its strategy needs, so these checks only exist here.
+// the per-strategy target fields. Verified against a real control plane
+// (2026-07-30): it rejects a weight-based target without `weight` and a
+// priority-based one without `priority`, but silently accepts — and ignores —
+// a `weight` or `priority` the strategy does not use. The "must not be set"
+// half therefore only exists here, so a value that would have no effect is a
+// plan-time error instead.
 func (r *gatewayLoadBalancingConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
 	// With for_each/count, ValidateConfig first runs on the unexpanded
 	// resource where each.*/count.* references are unknown; Go-native model

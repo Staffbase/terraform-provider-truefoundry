@@ -88,7 +88,7 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 ### Required
 
 - `name` (String) Name of the load balancing config (3-32 characters, lowercase alphanumeric and hyphens).
-- `rules` (Attributes Set) Load balancing rules. The first matching rule routes the request; order is not significant. (see [below for nested schema](#nestedatt--rules))
+- `rules` (Attributes Set) Load balancing rules, normally scoped so that at most one matches a given request. This is a set: the order rules are written in carries no meaning, and which rule wins when several match is up to the control plane. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only
 
@@ -101,7 +101,7 @@ Required:
 
 - `id` (String) Identifier of this rule, unique within the config. 2-62 characters of letters, digits, and hyphens; must start with a letter and end with a letter or digit.
 - `load_balance_targets` (Attributes Set) Target models matching requests are routed to. The control plane rejects targets that do not exist. (see [below for nested schema](#nestedatt--rules--load_balance_targets))
-- `type` (String) Routing strategy. One of: `weight-based-routing`, `latency-based-routing`, `priority-based-routing`. `weight-based-routing` needs a `weight` on every target, `priority-based-routing` a `priority`; `latency-based-routing` takes neither and picks the fastest target.
+- `type` (String) Routing strategy. One of: `weight-based-routing`, `latency-based-routing`, `priority-based-routing`. `weight-based-routing` needs a `weight` on every target, `priority-based-routing` a `priority`; `latency-based-routing` takes neither and picks the fastest target. The control plane ignores a `weight` or `priority` its strategy does not use, so this provider rejects that combination at plan time rather than applying a value that has no effect.
 - `when` (Attributes) Requests this rule applies to; all given parts must match. An empty block (`{}`) matches every request. (see [below for nested schema](#nestedatt--rules--when))
 
 <a id="nestedatt--rules--load_balance_targets"></a>
