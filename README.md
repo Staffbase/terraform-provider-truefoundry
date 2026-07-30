@@ -160,6 +160,7 @@ terraform import truefoundry_gateway_data_routing_config.routing gateway-data-ro
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
 terraform import truefoundry_gateway_rate_limiting_config.limits gateway-rate-limiting-config
 terraform import truefoundry_gateway_load_balancing_config.routing gateway-load-balancing-config
+terraform import truefoundry_gateway_otel_config.otel gateway-otel-config
 terraform import truefoundry_gateway_global_settings.settings gateway-global-settings
 ```
 
@@ -199,6 +200,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
 [`truefoundry_gateway_rate_limiting_config`](docs/resources/gateway_rate_limiting_config.md),
 [`truefoundry_gateway_load_balancing_config`](docs/resources/gateway_load_balancing_config.md),
+[`truefoundry_gateway_otel_config`](docs/resources/gateway_otel_config.md),
 [`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_mcp_server`](docs/resources/mcp_server.md),
@@ -250,12 +252,13 @@ make docs-check  # validate
   config (`truefoundry_gateway_data_routing_config`), guardrails config
   (`truefoundry_gateway_guardrails_config`), rate limiting config
   (`truefoundry_gateway_rate_limiting_config`), load balancing config
-  (`truefoundry_gateway_load_balancing_config`), and global settings
-  (`truefoundry_gateway_global_settings`) are modeled. Other gateway configs
-  (fallback, OTel) are not. The rate limiting rule matcher
-  models the `subjects`, `models`, and `metadata` filters of the SDK schema;
-  the control plane accepts unknown `when` fields without validating them, so
-  no undocumented filters are exposed.
+  (`truefoundry_gateway_load_balancing_config`), OpenTelemetry config
+  (`truefoundry_gateway_otel_config`), and global settings
+  (`truefoundry_gateway_global_settings`) are modeled. The fallback config is
+  not. The rate limiting rule matcher models the `subjects`, `models`, and
+  `metadata` filters of the SDK schema; the control plane accepts unknown
+  `when` fields without validating them, so no undocumented filters are
+  exposed.
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
