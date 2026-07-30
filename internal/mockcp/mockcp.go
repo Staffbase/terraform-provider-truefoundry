@@ -344,7 +344,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // isGatewayConfigType reports whether typ is a tenant-wide gateway config
 // manifest type the mock models.
 func isGatewayConfigType(typ string) bool {
-	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings"
+	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings" || typ == "gateway-rate-limiting-config"
 }
 
 // isMcpServerType reports whether typ is a standalone MCP server manifest
@@ -855,6 +855,8 @@ func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, man
 		msg = validateGatewayDataRoutingConfig(manifest)
 	case "gateway-guardrails-config":
 		msg = validateGatewayGuardrailsConfig(manifest)
+	case "gateway-rate-limiting-config":
+		msg = validateGatewayRateLimitingConfig(manifest)
 	case "gateway-global-settings":
 		msg = validateGatewayGlobalSettings(manifest)
 	}
@@ -1175,6 +1177,63 @@ func validateGatewayGuardrailsConfig(manifest map[string]any) string {
 			if _, ok := m[key].([]any); !ok {
 				return fmt.Sprintf("%s is required on guardrails rules", key)
 			}
+		}
+	}
+	return ""
+}
+
+// rateLimitRuleIDRe is the rate limiting rule id pattern the real control
+// plane enforces; the braces allow templated ids.
+var rateLimitRuleIDRe = regexp.MustCompile(`^[A-Za-z{}][A-Za-z0-9{}._-]{0,60}[A-Za-z0-9{}._]$`)
+
+// rateLimitMetadataAppliesPerRe matches the "metadata.<key>" partitioning.
+var rateLimitMetadataAppliesPerRe = regexp.MustCompile(`^metadata\.[A-Za-z0-9_-]+$`)
+
+// validateGatewayRateLimitingConfig enforces the rate limiting rule shape
+// derived from the TrueFoundry SDK's RateLimitConfig/RateLimitRule schemas
+// plus the semantic checks a deployed control plane applies (rule id pattern,
+// unit vocabulary, and the applies-per vocabulary and its two-value cap).
+func validateGatewayRateLimitingConfig(manifest map[string]any) string {
+	validUnits := map[string]bool{
+		"requests_per_minute": true, "requests_per_hour": true, "requests_per_day": true,
+		"tokens_per_minute": true, "tokens_per_hour": true, "tokens_per_day": true,
+	}
+	validAppliesPer := map[string]bool{"user": true, "virtualaccount": true, "model": true}
+	rules, ok := manifest["rules"].([]any)
+	if !ok {
+		return "rules is required"
+	}
+	seen := map[string]bool{}
+	for _, raw := range rules {
+		m, _ := raw.(map[string]any)
+		id, _ := m["id"].(string)
+		if !rateLimitRuleIDRe.MatchString(id) {
+			return fmt.Sprintf("Validation Error: GatewayConfig /rules/0/id: must match pattern %q", rateLimitRuleIDRe.String())
+		}
+		if seen[id] {
+			return fmt.Sprintf("duplicate rate limiting rule id %q", id)
+		}
+		seen[id] = true
+		if _, ok := m["limit_to"].(float64); !ok {
+			return "limit_to is required on rate limiting rules"
+		}
+		if unit, _ := m["unit"].(string); !validUnits[unit] {
+			return fmt.Sprintf("Validation Error: GatewayConfig /rules/0/unit: must be equal to one of the allowed values (got %q)", unit)
+		}
+		if _, ok := m["when"].(map[string]any); !ok {
+			return "when is required on rate limiting rules"
+		}
+		appliesPer, _ := m["rate_limit_applies_per"].([]any)
+		if len(appliesPer) > 2 {
+			return fmt.Sprintf("Rate limit rule %s cannot have more than two rate limit applies per values.", id)
+		}
+		for _, raw := range appliesPer {
+			v, _ := raw.(string)
+			if validAppliesPer[v] || rateLimitMetadataAppliesPerRe.MatchString(v) {
+				continue
+			}
+			return fmt.Sprintf("Rate limiting rule %s has invalid rate limit applies per value %s. "+
+				"Allowed values are: user, virtualaccount, model, or metadata.* (e.g., metadata.appId).", id, v)
 		}
 	}
 	return ""
