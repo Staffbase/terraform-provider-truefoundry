@@ -95,6 +95,7 @@ func otelExporterAttributes(signal string) map[string]schema.Attribute {
 		"endpoint": schema.StringAttribute{
 			Required:    true,
 			Description: fmt.Sprintf("URL of the collector receiving the %s.", signal),
+			Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 		},
 		"encoding": schema.StringAttribute{
 			Optional: true,

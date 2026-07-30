@@ -187,6 +187,19 @@ resource "truefoundry_gateway_otel_config" "bad" {
 			want: regexp.MustCompile(`value must be one of`),
 		},
 		{
+			name: "empty endpoint",
+			config: `
+resource "truefoundry_gateway_otel_config" "bad" {
+  otel_metrics_exporter_config = {
+    type     = "http"
+    encoding = "proto"
+    endpoint = ""
+  }
+}
+`,
+			want: regexp.MustCompile(`string length must be at\s+least 1`),
+		},
+		{
 			name: "span filter without values",
 			config: `
 resource "truefoundry_gateway_otel_config" "bad" {
