@@ -344,7 +344,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 // isGatewayConfigType reports whether typ is a tenant-wide gateway config
 // manifest type the mock models.
 func isGatewayConfigType(typ string) bool {
-	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings" || typ == "gateway-rate-limiting-config"
+	return typ == "gateway-budget-config" || typ == "gateway-data-access-config" || typ == "gateway-data-routing-config" || typ == "gateway-guardrails-config" || typ == "gateway-global-settings" || typ == "gateway-rate-limiting-config" || typ == "gateway-load-balancing-config"
 }
 
 // isMcpServerType reports whether typ is a standalone MCP server manifest
@@ -857,6 +857,8 @@ func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, man
 		msg = validateGatewayGuardrailsConfig(manifest)
 	case "gateway-rate-limiting-config":
 		msg = validateGatewayRateLimitingConfig(manifest)
+	case "gateway-load-balancing-config":
+		msg = validateGatewayLoadBalancingConfig(manifest)
 	case "gateway-global-settings":
 		msg = validateGatewayGlobalSettings(manifest)
 	}
@@ -1234,6 +1236,70 @@ func validateGatewayRateLimitingConfig(manifest map[string]any) string {
 			}
 			return fmt.Sprintf("Rate limiting rule %s has invalid rate limit applies per value %s. "+
 				"Allowed values are: user, virtualaccount, model, or metadata.* (e.g., metadata.appId).", id, v)
+		}
+	}
+	return ""
+}
+
+// loadBalancingRuleIDRe is the load balancing rule id pattern the real
+// control plane enforces.
+var loadBalancingRuleIDRe = regexp.MustCompile(`^[a-zA-Z](?:[a-zA-Z0-9\-]{0,60}[a-zA-Z0-9])$`)
+
+// validateGatewayLoadBalancingConfig enforces the load balancing rule shape
+// derived from the TrueFoundry SDK's LoadBalancingConfig schemas plus the rule
+// id pattern a deployed control plane enforces. The weight/priority checks
+// mirror the real control plane, which rejects a weight-based target without
+// `weight` and a priority-based one without `priority`. It does not reject the
+// converse (a `weight` on a priority- or latency-based target), so neither
+// does this mock — that rule lives in the resource's ValidateConfig only.
+func validateGatewayLoadBalancingConfig(manifest map[string]any) string {
+	validTypes := map[string]bool{
+		"weight-based-routing": true, "latency-based-routing": true, "priority-based-routing": true,
+	}
+	rules, ok := manifest["rules"].([]any)
+	if !ok {
+		return "rules is required"
+	}
+	seen := map[string]bool{}
+	for _, raw := range rules {
+		m, _ := raw.(map[string]any)
+		id, _ := m["id"].(string)
+		if !loadBalancingRuleIDRe.MatchString(id) {
+			return fmt.Sprintf("Validation Error: GatewayConfig /rules/0/id: must match pattern %q", loadBalancingRuleIDRe.String())
+		}
+		if seen[id] {
+			return fmt.Sprintf("duplicate load balancing rule id %q", id)
+		}
+		seen[id] = true
+		typ, _ := m["type"].(string)
+		if !validTypes[typ] {
+			return fmt.Sprintf("unknown load balancing rule type %q", typ)
+		}
+		if _, ok := m["when"].(map[string]any); !ok {
+			return "when is required on load balancing rules"
+		}
+		targets, _ := m["load_balance_targets"].([]any)
+		if len(targets) == 0 {
+			return fmt.Sprintf("load_balance_targets must not be empty on rule %s", id)
+		}
+		for _, raw := range targets {
+			t, _ := raw.(map[string]any)
+			target, _ := t["target"].(string)
+			if !strings.Contains(target, "/") {
+				return fmt.Sprintf("target %q must be a <provider-account>/<model> name", target)
+			}
+			_, hasWeight := t["weight"].(float64)
+			_, hasPriority := t["priority"].(float64)
+			switch typ {
+			case "weight-based-routing":
+				if !hasWeight {
+					return fmt.Sprintf("weight is required on weight-based-routing target %s", target)
+				}
+			case "priority-based-routing":
+				if !hasPriority {
+					return fmt.Sprintf("priority is required on priority-based-routing target %s", target)
+				}
+			}
 		}
 	}
 	return ""

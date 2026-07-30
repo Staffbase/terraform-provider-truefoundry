@@ -159,6 +159,7 @@ terraform import truefoundry_gateway_data_access_config.access gateway-data-acce
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
 terraform import truefoundry_gateway_rate_limiting_config.limits gateway-rate-limiting-config
+terraform import truefoundry_gateway_load_balancing_config.routing gateway-load-balancing-config
 terraform import truefoundry_gateway_global_settings.settings gateway-global-settings
 ```
 
@@ -197,6 +198,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_data_routing_config`](docs/resources/gateway_data_routing_config.md),
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
 [`truefoundry_gateway_rate_limiting_config`](docs/resources/gateway_rate_limiting_config.md),
+[`truefoundry_gateway_load_balancing_config`](docs/resources/gateway_load_balancing_config.md),
 [`truefoundry_gateway_global_settings`](docs/resources/gateway_global_settings.md),
 [`truefoundry_guardrail_group`](docs/resources/guardrail_group.md),
 [`truefoundry_mcp_server`](docs/resources/mcp_server.md),
@@ -228,8 +230,10 @@ make docs-check  # validate
   `virtual-model`. Not yet supported: Azure
   certificate/client-secret/workload-identity auth, AWS assumed-role auth,
   volume-based pricing tiers in `cost`, and the advanced routing options
-  `retry_config`, `sticky_routing`, `sla_cutoff`, `override_params`, and
-  latency-based routing. **Do not manage a pre-existing provider account that
+  `retry_config`, `sticky_routing`, `sla_cutoff`, and `override_params`.
+  Latency-based routing is available in
+  `truefoundry_gateway_load_balancing_config`, but not in a virtual model's
+  `routing` block. **Do not manage a pre-existing provider account that
   uses unsupported features** — an apply would strip them from its manifest.
 - Custom endpoint accounts (`truefoundry_custom_endpoint_account`): account-level
   default auth headers (`auth_data` on the account manifest) and ownership are
@@ -245,9 +249,10 @@ make docs-check  # validate
   (`truefoundry_gateway_data_access_config`), data routing
   config (`truefoundry_gateway_data_routing_config`), guardrails config
   (`truefoundry_gateway_guardrails_config`), rate limiting config
-  (`truefoundry_gateway_rate_limiting_config`), and global settings
+  (`truefoundry_gateway_rate_limiting_config`), load balancing config
+  (`truefoundry_gateway_load_balancing_config`), and global settings
   (`truefoundry_gateway_global_settings`) are modeled. Other gateway configs
-  (fallback, load balancing, OTel) are not. The rate limiting rule matcher
+  (fallback, OTel) are not. The rate limiting rule matcher
   models the `subjects`, `models`, and `metadata` filters of the SDK schema;
   the control plane accepts unknown `when` fields without validating them, so
   no undocumented filters are exposed.
