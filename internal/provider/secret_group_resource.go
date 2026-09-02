@@ -224,9 +224,17 @@ func (r *secretGroupResource) apply(ctx context.Context, plan *secretGroupResour
 }
 
 // getSecretGroupByName fetches a single secret group by name via the list
-// endpoint. The endpoint's fqn filter works, but the FQN is tenant-prefixed
-// and unknown before the first read, so matching on the name is the one path
-// that serves create-read-back, refresh, and import alike.
+// endpoint.
+//
+// The endpoint honors ?fqn= but ignores ?name= (verified against a real
+// control plane: a nonexistent name still returns every group), so unlike
+// getMlRepoByName this cannot push the name match server-side. Filtering by
+// FQN instead is deliberately not done: the FQN is just "<tenant>:<name>", so
+// it selects the same row, it is unknown on import and on the first read
+// after a create, and a stale FQN in state would turn a live group into a
+// "not found" — which for this resource means a plan that recreates a group
+// whose secrets Terraform cannot restore. Groups are few per tenant and the
+// page size is 100, so the unfiltered list is a single request either way.
 func getSecretGroupByName(ctx context.Context, c *client.Client, name string) (*client.SecretGroup, bool, error) {
 	groups, err := c.ListSecretGroups(ctx, "")
 	if err != nil {
