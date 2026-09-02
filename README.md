@@ -132,8 +132,8 @@ porting rules, and a rollout order are in the
 
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
-are imported by their FQN, agents, ML repos, agent skills, and prompts by
-their name, virtual accounts by their ID, and gateway configs (tenant-wide
+are imported by their FQN, agents, ML repos, agent skills, prompts, and roles
+by their name, virtual accounts by their ID, and gateway configs (tenant-wide
 singletons) by fixed string IDs:
 
 ```sh
@@ -151,6 +151,7 @@ terraform import truefoundry_remote_agent.billing billing-agent
 terraform import truefoundry_ml_repo.artifacts gateway-artifacts
 terraform import truefoundry_agent_skill.writing ticket-writing
 terraform import truefoundry_prompt.triage ticket-triage
+terraform import truefoundry_role.member member
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_tenant_budget_config.cluster cluster-daily-cap
@@ -211,6 +212,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_ml_repo`](docs/resources/ml_repo.md),
 [`truefoundry_agent_skill`](docs/resources/agent_skill.md),
 [`truefoundry_prompt`](docs/resources/prompt.md),
+[`truefoundry_role`](docs/resources/role.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 
@@ -291,6 +293,16 @@ make docs-check  # validate
   prompt that uses them drops them from the new version**. Every skill or
   prompt apply creates a new immutable version; the containing ML repo must
   already exist on the tenant.
+- Roles (`truefoundry_role`): only user-defined roles scoped to the tenant or a
+  team are manageable — the control plane rejects every other scope
+  (`workspace`, `cluster`, `secret-group`, …) for user-defined roles, and
+  `account` is a legacy alias it silently stores as `tenant`. Roles TrueFoundry
+  reserves (`is_editable = false`) cannot be imported or applied. Roles it
+  creates at onboarding (`is_default = true`, e.g. `member`) can be updated in
+  place, but **import them rather than creating them**, and note that
+  `terraform destroy` only removes them from state — the control plane keeps
+  the role with the permissions of the last apply. The control-plane-computed
+  `permissionSetsV2` expansion and role bindings are not modeled.
 - Virtual accounts: auto-rotation, notification targets, ownership, and identity
   provider mappings are not modeled (same caveat as above for pre-existing
   accounts). The account token is stored in the Terraform state; prefer

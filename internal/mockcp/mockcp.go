@@ -30,6 +30,7 @@ type Server struct {
 	gwconfigs  map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
 	budgets    map[string]*budgetV2       // v2 budget rules, keyed by manifest name
 	mcpservers map[string]*mcpServer      // keyed by manifest name
+	roles      map[string]*role           // keyed by manifest name
 	agents     map[string]*agent          // keyed by manifest name
 	mlrepos    map[string]*mlRepo         // keyed by manifest name
 	skills     map[string]*artifactSeries // keyed by manifest name
@@ -66,7 +67,9 @@ type agent struct {
 
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	return &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
+	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
+	s.seedBuiltinRoles()
+	return s
 }
 
 // Handler returns the HTTP handler implementing the API.
@@ -78,6 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/svc/v1/mcp-servers", s.auth(s.handleListMcpServers))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/config/{type}", s.auth(s.handleGetGatewayConfig))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/budgets", s.auth(s.handleListBudgets))
+	mux.HandleFunc("GET /api/svc/v1/role", s.auth(s.handleListRoles))
 	mux.HandleFunc("PUT /api/svc/v1/virtual-accounts", s.auth(s.handleApplyVirtualAccount))
 	mux.HandleFunc("GET /api/svc/v1/virtual-accounts/{id}", s.auth(s.handleGetVirtualAccount))
 	mux.HandleFunc("DELETE /api/svc/v1/virtual-accounts/{id}", s.auth(s.handleDeleteVirtualAccount))
@@ -299,6 +303,10 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if isMcpServerType(typ) {
 		s.applyMcpServer(w, typ, name, req.Manifest, req.DryRun)
+		return
+	}
+	if isRoleType(typ) {
+		s.applyRole(w, typ, name, req.Manifest, req.DryRun)
 		return
 	}
 	if !strings.HasPrefix(typ, "provider-account/") {
@@ -1491,6 +1499,20 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delete(s.mcpservers, name)
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	if typ, _ := req.Manifest["type"].(string); isRoleType(typ) {
+		r, ok := s.roles[name]
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": fmt.Sprintf("Resource with name %s not found", name)})
+			return
+		}
+		if !r.editable {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Role %s is not editable", name)})
+			return
+		}
+		delete(s.roles, name)
 		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}

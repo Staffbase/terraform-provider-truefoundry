@@ -30,7 +30,8 @@ AI Gateway resources on a TrueFoundry control plane:
   [HashiCorp Vault secret stores](resources/hashicorp_account.md), and the
   [built-in system secret store](resources/system_secret_store.md).
 - **Access** — [virtual accounts](resources/virtual_account.md) (service
-  accounts) with scoped permissions and token handling.
+  accounts) with scoped permissions and token handling, and custom
+  [roles](resources/role.md) that `role_id` references resolve against.
 
 ## Example Usage
 

@@ -120,6 +120,7 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newGatewayOtelConfigResource,
 		newGatewayRateLimitingConfigResource,
 		newGatewayGlobalSettingsResource,
+		newRoleResource,
 		newMcpServerResource,
 		newOpenapiMcpServerResource,
 		newVirtualMcpServerResource,
