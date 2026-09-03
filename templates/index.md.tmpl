@@ -27,8 +27,10 @@ AI Gateway resources on a TrueFoundry control plane:
   Content Safety).
 - **Platform integrations** — [Azure blob storage](resources/azure_account.md),
   [Slack notification channels](resources/slack_account.md),
-  [HashiCorp Vault secret stores](resources/hashicorp_account.md), and the
-  [built-in system secret store](resources/system_secret_store.md).
+  [HashiCorp Vault secret stores](resources/hashicorp_account.md), the
+  [built-in system secret store](resources/system_secret_store.md), and the
+  [secret groups](resources/secret_group.md) whose secrets every credential
+  attribute can reference.
 - **Access** — [virtual accounts](resources/virtual_account.md) (service
   accounts) with scoped permissions and token handling, and custom
   [roles](resources/role.md) that `role_id` references resolve against.

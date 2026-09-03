@@ -24,18 +24,19 @@ const Tenant = "mock-tenant"
 type Server struct {
 	apiKey string
 
-	mu         sync.Mutex
-	accounts   map[string]*account        // keyed by manifest name
-	vaccounts  map[string]*virtualAccount // keyed by manifest name
-	gwconfigs  map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
-	budgets    map[string]*budgetV2       // v2 budget rules, keyed by manifest name
-	mcpservers map[string]*mcpServer      // keyed by manifest name
-	roles      map[string]*role           // keyed by manifest name
-	agents     map[string]*agent          // keyed by manifest name
-	mlrepos    map[string]*mlRepo         // keyed by manifest name
-	skills     map[string]*artifactSeries // keyed by manifest name
-	prompts    map[string]*artifactSeries // keyed by manifest name
-	nextID     int
+	mu           sync.Mutex
+	accounts     map[string]*account        // keyed by manifest name
+	vaccounts    map[string]*virtualAccount // keyed by manifest name
+	gwconfigs    map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
+	budgets      map[string]*budgetV2       // v2 budget rules, keyed by manifest name
+	mcpservers   map[string]*mcpServer      // keyed by manifest name
+	secretgroups map[string]*secretGroup    // keyed by manifest name
+	roles        map[string]*role           // keyed by manifest name
+	agents       map[string]*agent          // keyed by manifest name
+	mlrepos      map[string]*mlRepo         // keyed by manifest name
+	skills       map[string]*artifactSeries // keyed by manifest name
+	prompts      map[string]*artifactSeries // keyed by manifest name
+	nextID       int
 }
 
 type account struct {
@@ -67,7 +68,7 @@ type agent struct {
 
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
+	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, secretgroups: map[string]*secretGroup{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
 	s.seedBuiltinRoles()
 	return s
 }
@@ -79,6 +80,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/svc/v1/delete", s.auth(s.handleDelete))
 	mux.HandleFunc("GET /api/svc/v1/provider-integrations", s.auth(s.handleListIntegrations))
 	mux.HandleFunc("GET /api/svc/v1/mcp-servers", s.auth(s.handleListMcpServers))
+	mux.HandleFunc("GET /api/svc/v1/secret-groups", s.auth(s.handleListSecretGroups))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/config/{type}", s.auth(s.handleGetGatewayConfig))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/budgets", s.auth(s.handleListBudgets))
 	mux.HandleFunc("GET /api/svc/v1/role", s.auth(s.handleListRoles))
@@ -307,6 +309,10 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if isRoleType(typ) {
 		s.applyRole(w, typ, name, req.Manifest, req.DryRun)
+		return
+	}
+	if isSecretGroupType(typ) {
+		s.applySecretGroup(w, typ, name, req.Manifest, req.DryRun)
 		return
 	}
 	if !strings.HasPrefix(typ, "provider-account/") {
@@ -1513,6 +1519,15 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		delete(s.roles, name)
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	if typ, _ := req.Manifest["type"].(string); isSecretGroupType(typ) {
+		if _, ok := s.secretgroups[name]; !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"message": fmt.Sprintf("Resource with name %s not found", name)})
+			return
+		}
+		delete(s.secretgroups, name)
 		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
