@@ -111,7 +111,7 @@ func (s *Server) DeletePromptByName(name string) {
 
 // mlRepoNameRe is the ML repo name pattern of the real control plane,
 // "^[a-zA-Z][a-zA-Z0-9\\-]{1,98}[a-zA-Z0-9]$" (3-100 characters). ML repo
-// names are the one manifest family that accepts upper case.
+// names accept upper case, like tenant/team budget config names do.
 var mlRepoNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{1,98}[a-zA-Z0-9]$`)
 
 // artifactNameRe mirrors the provider's own agent-skill/prompt name
@@ -139,7 +139,7 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !mlRepoNameRe.MatchString(name) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: MLRepoManifest /name: must match pattern %q", mlRepoNameRe.String())})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: MlRepoManifest /name: must match pattern %q", mlRepoNameRe.String())})
 		return
 	}
 	if _, ok := req["collaborators"].([]any); !ok {

@@ -200,6 +200,10 @@ func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name is required"})
 		return
 	}
+	if !accountNameRe.MatchString(name) || len(name) < 3 || len(name) > 36 {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": fmt.Sprintf("name must be 3-36 characters and match %q", accountNameRe.String())})
+		return
+	}
 	if _, ok := req.Manifest["permissions"].([]any); !ok {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "permissions are required"})
 		return

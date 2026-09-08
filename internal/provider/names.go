@@ -16,7 +16,8 @@ var (
 	nameRegexp = regexp.MustCompile(`^[a-z][a-z0-9-]+[a-z0-9]$`)
 
 	// mlRepoNameRegexp is the shape of "^[a-zA-Z][a-zA-Z0-9\-]{1,98}[a-zA-Z0-9]$"
-	// (ML repo names may contain upper case, unlike other manifest names); the
+	// (ML repo names may contain upper case, unlike most other manifest
+	// families — tenant/team budget config names allow it too); the
 	// regex itself only enforces the minimum (3 characters), not the 98-char
 	// upper bound on the middle segment — that is checked separately via
 	// maxMlRepoNameLen.
