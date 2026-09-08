@@ -53,6 +53,7 @@ type Client struct {
 
 	listMu    sync.Mutex
 	listCache map[string]any
+	listEpoch int64
 	listGroup singleflight.Group
 }
 
@@ -343,14 +344,31 @@ func (c *Client) ListModelIntegrations(ctx context.Context, fqn string) ([]Provi
 
 // listIntegrations pages through GET /api/svc/v1/provider-integrations for
 // one integration type, decoding entries as T. Results are cached per
-// (integrationType, fqn) for the life of c, and concurrent callers for the
-// same key share one in-flight fetch - see Client's doc comment for why.
+// (T, integrationType, fqn) for the life of c - the type is part of the key
+// because some integrationType values are shared by more than one T (e.g.
+// "secret-store" backs both SecretStoreIntegration and
+// TrueFoundrySecretStoreIntegration), and a bare integrationType|fqn key
+// would let one caller's cached value get type-asserted as the other's T.
+//
+// Concurrent callers for the same key share one in-flight fetch via
+// singleflight, but the fetch itself runs detached from any single caller's
+// context (via DoChan + context.Background for the request) so that one
+// caller's cancellation/timeout can't fail every other caller waiting on the
+// same shared fetch; each caller still stops waiting - and returns its own
+// ctx.Err() - the moment its own context is done, without affecting the
+// fetch or the other waiters.
+//
+// The fetch only writes to the cache if no invalidation happened while it
+// was in flight (compared via listEpoch), so a mutation racing a concurrent
+// Read can never have its result "resurrected" into the cache afterwards by
+// a slower, already in-flight fetch that started before the mutation.
 func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fqn string) ([]T, error) {
-	key := integrationType + "|" + fqn
+	key := fmt.Sprintf("%T|%s|%s", *new(T), integrationType, fqn)
 	if cached, ok := c.getListCache(key); ok {
 		return cached.([]T), nil
 	}
-	v, err, _ := c.listGroup.Do(key, func() (any, error) {
+	epoch := c.currentListEpoch()
+	ch := c.listGroup.DoChan(key, func() (any, error) {
 		if cached, ok := c.getListCache(key); ok {
 			return cached, nil
 		}
@@ -362,7 +380,10 @@ func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fq
 				q.Set("fqn", fqn)
 			}
 			var page listIntegrationsResponse[T]
-			if err := c.do(ctx, http.MethodGet, integrationsPath, q, nil, &page); err != nil {
+			// Detached from the caller: a shared fetch must not be
+			// cancellable by whichever single waiter happens to be its
+			// singleflight leader.
+			if err := c.do(context.Background(), http.MethodGet, integrationsPath, q, nil, &page); err != nil {
 				return nil, err
 			}
 			all = append(all, page.Data...)
@@ -371,13 +392,18 @@ func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fq
 				break
 			}
 		}
-		c.setListCache(key, all)
+		c.setListCacheIfEpoch(key, all, epoch)
 		return all, nil
 	})
-	if err != nil {
-		return nil, err
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.([]T), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-	return v.([]T), nil
 }
 
 func (c *Client) getListCache(key string) (any, bool) {
@@ -387,15 +413,29 @@ func (c *Client) getListCache(key string) (any, bool) {
 	return v, ok
 }
 
-func (c *Client) setListCache(key string, v any) {
+func (c *Client) currentListEpoch() int64 {
 	c.listMu.Lock()
 	defer c.listMu.Unlock()
-	c.listCache[key] = v
+	return c.listEpoch
+}
+
+// setListCacheIfEpoch caches v under key unless an invalidation happened
+// since epoch was captured (at the start of the fetch that produced v) - in
+// that case v is still a correct, fresh result to return to the caller, it
+// is just deliberately not cached, so the next call re-fetches instead of
+// keeping a value that raced a mutation.
+func (c *Client) setListCacheIfEpoch(key string, v any, epoch int64) {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	if c.listEpoch == epoch {
+		c.listCache[key] = v
+	}
 }
 
 func (c *Client) invalidateListCache() {
 	c.listMu.Lock()
 	defer c.listMu.Unlock()
+	c.listEpoch++
 	c.listCache = map[string]any{}
 }
 

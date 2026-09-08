@@ -243,3 +243,96 @@ func TestListModelIntegrationsCachedPerClient(t *testing.T) {
 		t.Errorf("got %d integrations after update, want 2 (cache must reflect the update, not stale data)", len(all))
 	}
 }
+
+// TestListIntegrationsCacheKeyIncludesType reproduces a real collision: two
+// different List*Integrations methods share the same integrationType
+// ("secret-store", by both Vault and TrueFoundry-DB secret stores) but
+// decode into different Go types. Both list the same tenant-wide
+// type=secret-store entries (each caller is responsible for filtering by
+// Manifest.Type/ProviderAccountFQN itself, same as ListSecretStoreIntegrations'
+// doc comment says) - what must not happen is a cached []SecretStoreIntegration
+// getting type-asserted as []TrueFoundrySecretStoreIntegration (or vice
+// versa) just because both calls share the same (integrationType, fqn).
+func TestListIntegrationsCacheKeyIncludesType(t *testing.T) {
+	c, _ := newTestClient(t)
+	ctx := context.Background()
+
+	hashicorpManifest := client.HashicorpAccountManifest{
+		Type: "provider-account/hashicorp",
+		Name: "vault-acct",
+		Integrations: []client.VaultIntegration{
+			{
+				Type:        "integration/secret-store/hashicorp/vault",
+				Name:        "vault-1",
+				VaultURL:    "https://vault.example.com",
+				KVMountPath: "kv/path",
+				AuthData:    &client.APIKeyAuth{Type: "token", Token: "s.token"},
+			},
+		},
+	}
+	if _, err := c.Apply(ctx, hashicorpManifest, false); err != nil {
+		t.Fatalf("Apply hashicorp account: %v", err)
+	}
+
+	truefoundryManifest := client.TrueFoundryAccountManifest{
+		Type: "provider-account/truefoundry",
+		Name: "system-store-acct",
+		Integrations: []client.TrueFoundrySecretStore{
+			{Type: "integration/secret-store/truefoundry/db", Name: "store-1"},
+		},
+	}
+	if _, err := c.Apply(ctx, truefoundryManifest, false); err != nil {
+		t.Fatalf("Apply truefoundry account: %v", err)
+	}
+
+	// Both calls see every type=secret-store entry tenant-wide (2: one
+	// vault, one truefoundry store) - decoded as their own T. The concrete
+	// slice types differ, but a naive integrationType|fqn cache key would
+	// still panic asserting one cached []T as the other on the second call.
+	vaults, err := c.ListSecretStoreIntegrations(ctx, "")
+	if err != nil {
+		t.Fatalf("ListSecretStoreIntegrations: %v", err)
+	}
+	if len(vaults) != 2 {
+		t.Fatalf("ListSecretStoreIntegrations returned %d entries, want 2", len(vaults))
+	}
+	vault := findByName(t, vaults, "vault-1", func(v client.SecretStoreIntegration) string { return v.Name })
+	if vault.Manifest.VaultURL != "https://vault.example.com" || vault.Manifest.KVMountPath != "kv/path" {
+		t.Errorf("vault-1 entry = %+v, want its VaultIntegration fields populated", vault)
+	}
+
+	// This call must not panic type-asserting a cached []SecretStoreIntegration
+	// as []TrueFoundrySecretStoreIntegration.
+	stores, err := c.ListTrueFoundrySecretStoreIntegrations(ctx, "")
+	if err != nil {
+		t.Fatalf("ListTrueFoundrySecretStoreIntegrations: %v", err)
+	}
+	if len(stores) != 2 {
+		t.Fatalf("ListTrueFoundrySecretStoreIntegrations returned %d entries, want 2", len(stores))
+	}
+	store := findByName(t, stores, "store-1", func(v client.TrueFoundrySecretStoreIntegration) string { return v.Name })
+	if store.Manifest.Type != "integration/secret-store/truefoundry/db" {
+		t.Errorf("store-1 entry = %+v, want its TrueFoundrySecretStore manifest type", store)
+	}
+
+	// And a repeat call must still return the right, distinct, still-cached type.
+	vaultsAgain, err := c.ListSecretStoreIntegrations(ctx, "")
+	if err != nil {
+		t.Fatalf("ListSecretStoreIntegrations (again): %v", err)
+	}
+	if len(vaultsAgain) != 2 {
+		t.Errorf("ListSecretStoreIntegrations (again) returned %d entries, want 2", len(vaultsAgain))
+	}
+}
+
+func findByName[T any](t *testing.T, items []T, name string, nameOf func(T) string) T {
+	t.Helper()
+	for _, item := range items {
+		if nameOf(item) == name {
+			return item
+		}
+	}
+	t.Fatalf("no entry named %q in %+v", name, items)
+	var zero T
+	return zero
+}
