@@ -19,7 +19,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -29,11 +32,29 @@ const (
 )
 
 // Client talks to a TrueFoundry control plane.
+//
+// One Client is shared by every resource and data source instance for the
+// lifetime of a single provider run (one `terraform plan`/`apply`). A config
+// with many resources of the same integration-backed type (provider
+// accounts, custom endpoints, the models data source, ...) each independently
+// call listIntegrations for the exact same, tenant-wide, non-account-scoped
+// list - the control plane has no server-side filter narrower than "one type,
+// every account". listCache/listGroup dedupe those identical calls within one
+// run: singleflight collapses concurrent callers (Terraform runs Reads in
+// parallel) into a single HTTP round trip, and the cache serves repeat
+// callers after that without another round trip. Apply/Delete invalidate the
+// whole cache on any real (non-dryRun) mutation, since either can change any
+// integration list.
 type Client struct {
 	baseURL   string
 	apiKey    string
 	userAgent string
 	http      *http.Client
+
+	listMu    sync.Mutex
+	listCache map[string]any
+	listEpoch int64
+	listGroup singleflight.Group
 }
 
 // New returns a client for the control plane at baseURL authenticating with apiKey.
@@ -47,6 +68,7 @@ func New(baseURL, apiKey, userAgent string) (*Client, error) {
 		apiKey:    apiKey,
 		userAgent: userAgent,
 		http:      &http.Client{Timeout: 60 * time.Second},
+		listCache: map[string]any{},
 	}, nil
 }
 
@@ -288,20 +310,30 @@ type listIntegrationsResponse[T any] struct {
 	} `json:"pagination"`
 }
 
-// Apply creates or updates a resource from its manifest.
+// Apply creates or updates a resource from its manifest. A real (non-dryRun)
+// apply can change any provider-integrations list, so it invalidates the
+// whole listIntegrations cache; dryRun does not persist and leaves it alone.
 func (c *Client) Apply(ctx context.Context, manifest any, dryRun bool) (*ApplyResponse, error) {
 	body := map[string]any{"manifest": manifest, "dryRun": dryRun}
 	var out ApplyResponse
 	if err := c.do(ctx, http.MethodPut, applyPath, nil, body, &out); err != nil {
 		return nil, err
 	}
+	if !dryRun {
+		c.invalidateListCache()
+	}
 	return &out, nil
 }
 
-// Delete deletes the resource identified by manifest.
+// Delete deletes the resource identified by manifest, invalidating the
+// listIntegrations cache since it can remove entries from any list.
 func (c *Client) Delete(ctx context.Context, manifest any) error {
 	body := map[string]any{"manifest": manifest}
-	return c.do(ctx, http.MethodPost, deletePath, nil, body, nil)
+	if err := c.do(ctx, http.MethodPost, deletePath, nil, body, nil); err != nil {
+		return err
+	}
+	c.invalidateListCache()
+	return nil
 }
 
 // ListModelIntegrations returns all gateway model integrations, following
@@ -311,25 +343,122 @@ func (c *Client) ListModelIntegrations(ctx context.Context, fqn string) ([]Provi
 }
 
 // listIntegrations pages through GET /api/svc/v1/provider-integrations for
-// one integration type, decoding entries as T.
+// one integration type, decoding entries as T. Results are cached per
+// (T, integrationType, fqn) for the life of c - the type is part of the key
+// because some integrationType values are shared by more than one T (e.g.
+// "secret-store" backs both SecretStoreIntegration and
+// TrueFoundrySecretStoreIntegration), and a bare integrationType|fqn key
+// would let one caller's cached value get type-asserted as the other's T.
+//
+// Concurrent callers for the same key share one in-flight fetch via
+// singleflight, but the fetch itself runs detached from any single caller's
+// context (via DoChan + context.Background for the request) so that one
+// caller's cancellation/timeout can't fail every other caller waiting on the
+// same shared fetch; each caller still stops waiting - and returns its own
+// ctx.Err() - the moment its own context is done, without affecting the
+// fetch or the other waiters.
+//
+// The fetch only writes to the cache if no invalidation happened while it
+// was in flight (compared via listEpoch), so a mutation racing a concurrent
+// Read can never have its result "resurrected" into the cache afterwards by
+// a slower, already in-flight fetch that started before the mutation.
+// listEpoch is also folded into the singleflight key itself, so a caller
+// after an invalidation always starts (or joins) a fetch of its own,
+// current epoch - never joins, and receives the result of, a fetch that a
+// pre-invalidation caller already has in flight under the old epoch.
 func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fqn string) ([]T, error) {
-	var all []T
-	offset := 0
-	for {
-		q := url.Values{"type": {integrationType}, "offset": {strconv.Itoa(offset)}, "limit": {"100"}}
-		if fqn != "" {
-			q.Set("fqn", fqn)
-		}
-		var page listIntegrationsResponse[T]
-		if err := c.do(ctx, http.MethodGet, integrationsPath, q, nil, &page); err != nil {
-			return nil, err
-		}
-		all = append(all, page.Data...)
-		offset += len(page.Data)
-		if len(page.Data) == 0 || offset >= page.Pagination.Total {
-			return all, nil
-		}
+	key := fmt.Sprintf("%T|%s|%s", *new(T), integrationType, fqn)
+	if cached, ok := c.getListCache(key); ok {
+		return cached.([]T), nil
 	}
+	// keyEpoch is captured once, before DoChan, and folded into the
+	// singleflight key itself (not the cache key): a caller after an
+	// invalidation always reads the new epoch, so it always gets its own
+	// singleflight entry instead of joining a fetch that a pre-invalidation
+	// caller already has in flight under the old epoch's key. Without this,
+	// "later Read never sees stale data" (see Client's doc comment) didn't
+	// hold - a post-invalidation caller could still join, and receive the
+	// result of, a pre-invalidation fetch, since a bare integrationType|fqn
+	// key doesn't change across invalidations.
+	keyEpoch := c.currentListEpoch()
+	sfKey := fmt.Sprintf("%s|%d", key, keyEpoch)
+	ch := c.listGroup.DoChan(sfKey, func() (any, error) {
+		if cached, ok := c.getListCache(key); ok {
+			return cached, nil
+		}
+		// Re-read right before the fetch starts (shadowing keyEpoch, which
+		// only needs to be fixed early enough to build sfKey above): using
+		// the freshest epoch here - instead of keyEpoch - means an
+		// invalidation that already landed before this singleflight leader
+		// got scheduled doesn't needlessly block caching a result that's
+		// fresh anyway; only an invalidation racing the fetch itself (below)
+		// still does.
+		epoch := c.currentListEpoch()
+		var all []T
+		offset := 0
+		for {
+			q := url.Values{"type": {integrationType}, "offset": {strconv.Itoa(offset)}, "limit": {"100"}}
+			if fqn != "" {
+				q.Set("fqn", fqn)
+			}
+			var page listIntegrationsResponse[T]
+			// Detached from the caller: a shared fetch must not be
+			// cancellable by whichever single waiter happens to be its
+			// singleflight leader.
+			if err := c.do(context.Background(), http.MethodGet, integrationsPath, q, nil, &page); err != nil {
+				return nil, err
+			}
+			all = append(all, page.Data...)
+			offset += len(page.Data)
+			if len(page.Data) == 0 || offset >= page.Pagination.Total {
+				break
+			}
+		}
+		c.setListCacheIfEpoch(key, all, epoch)
+		return all, nil
+	})
+	select {
+	case res := <-ch:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.([]T), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *Client) getListCache(key string) (any, bool) {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	v, ok := c.listCache[key]
+	return v, ok
+}
+
+func (c *Client) currentListEpoch() int64 {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	return c.listEpoch
+}
+
+// setListCacheIfEpoch caches v under key unless an invalidation happened
+// since epoch was captured (at the start of the fetch that produced v) - in
+// that case v is still a correct, fresh result to return to the caller, it
+// is just deliberately not cached, so the next call re-fetches instead of
+// keeping a value that raced a mutation.
+func (c *Client) setListCacheIfEpoch(key string, v any, epoch int64) {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	if c.listEpoch == epoch {
+		c.listCache[key] = v
+	}
+}
+
+func (c *Client) invalidateListCache() {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	c.listEpoch++
+	c.listCache = map[string]any{}
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {
