@@ -367,11 +367,16 @@ func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fq
 	if cached, ok := c.getListCache(key); ok {
 		return cached.([]T), nil
 	}
-	epoch := c.currentListEpoch()
 	ch := c.listGroup.DoChan(key, func() (any, error) {
 		if cached, ok := c.getListCache(key); ok {
 			return cached, nil
 		}
+		// Captured here, right before the fetch actually starts (not by the
+		// caller before DoChan), so only an invalidation racing the fetch
+		// itself blocks caching - not one that already landed before this
+		// singleflight leader got scheduled, which would otherwise cache a
+		// result reflecting the mutation as if it were stale.
+		epoch := c.currentListEpoch()
 		var all []T
 		offset := 0
 		for {
