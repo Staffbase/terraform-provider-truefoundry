@@ -19,7 +19,10 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -29,11 +32,28 @@ const (
 )
 
 // Client talks to a TrueFoundry control plane.
+//
+// One Client is shared by every resource and data source instance for the
+// lifetime of a single provider run (one `terraform plan`/`apply`). A config
+// with many resources of the same integration-backed type (provider
+// accounts, custom endpoints, the models data source, ...) each independently
+// call listIntegrations for the exact same, tenant-wide, non-account-scoped
+// list - the control plane has no server-side filter narrower than "one type,
+// every account". listCache/listGroup dedupe those identical calls within one
+// run: singleflight collapses concurrent callers (Terraform runs Reads in
+// parallel) into a single HTTP round trip, and the cache serves repeat
+// callers after that without another round trip. Apply/Delete invalidate the
+// whole cache on any real (non-dryRun) mutation, since either can change any
+// integration list.
 type Client struct {
 	baseURL   string
 	apiKey    string
 	userAgent string
 	http      *http.Client
+
+	listMu    sync.Mutex
+	listCache map[string]any
+	listGroup singleflight.Group
 }
 
 // New returns a client for the control plane at baseURL authenticating with apiKey.
@@ -47,6 +67,7 @@ func New(baseURL, apiKey, userAgent string) (*Client, error) {
 		apiKey:    apiKey,
 		userAgent: userAgent,
 		http:      &http.Client{Timeout: 60 * time.Second},
+		listCache: map[string]any{},
 	}, nil
 }
 
@@ -288,20 +309,30 @@ type listIntegrationsResponse[T any] struct {
 	} `json:"pagination"`
 }
 
-// Apply creates or updates a resource from its manifest.
+// Apply creates or updates a resource from its manifest. A real (non-dryRun)
+// apply can change any provider-integrations list, so it invalidates the
+// whole listIntegrations cache; dryRun does not persist and leaves it alone.
 func (c *Client) Apply(ctx context.Context, manifest any, dryRun bool) (*ApplyResponse, error) {
 	body := map[string]any{"manifest": manifest, "dryRun": dryRun}
 	var out ApplyResponse
 	if err := c.do(ctx, http.MethodPut, applyPath, nil, body, &out); err != nil {
 		return nil, err
 	}
+	if !dryRun {
+		c.invalidateListCache()
+	}
 	return &out, nil
 }
 
-// Delete deletes the resource identified by manifest.
+// Delete deletes the resource identified by manifest, invalidating the
+// listIntegrations cache since it can remove entries from any list.
 func (c *Client) Delete(ctx context.Context, manifest any) error {
 	body := map[string]any{"manifest": manifest}
-	return c.do(ctx, http.MethodPost, deletePath, nil, body, nil)
+	if err := c.do(ctx, http.MethodPost, deletePath, nil, body, nil); err != nil {
+		return err
+	}
+	c.invalidateListCache()
+	return nil
 }
 
 // ListModelIntegrations returns all gateway model integrations, following
@@ -311,25 +342,61 @@ func (c *Client) ListModelIntegrations(ctx context.Context, fqn string) ([]Provi
 }
 
 // listIntegrations pages through GET /api/svc/v1/provider-integrations for
-// one integration type, decoding entries as T.
+// one integration type, decoding entries as T. Results are cached per
+// (integrationType, fqn) for the life of c, and concurrent callers for the
+// same key share one in-flight fetch - see Client's doc comment for why.
 func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fqn string) ([]T, error) {
-	var all []T
-	offset := 0
-	for {
-		q := url.Values{"type": {integrationType}, "offset": {strconv.Itoa(offset)}, "limit": {"100"}}
-		if fqn != "" {
-			q.Set("fqn", fqn)
-		}
-		var page listIntegrationsResponse[T]
-		if err := c.do(ctx, http.MethodGet, integrationsPath, q, nil, &page); err != nil {
-			return nil, err
-		}
-		all = append(all, page.Data...)
-		offset += len(page.Data)
-		if len(page.Data) == 0 || offset >= page.Pagination.Total {
-			return all, nil
-		}
+	key := integrationType + "|" + fqn
+	if cached, ok := c.getListCache(key); ok {
+		return cached.([]T), nil
 	}
+	v, err, _ := c.listGroup.Do(key, func() (any, error) {
+		if cached, ok := c.getListCache(key); ok {
+			return cached, nil
+		}
+		var all []T
+		offset := 0
+		for {
+			q := url.Values{"type": {integrationType}, "offset": {strconv.Itoa(offset)}, "limit": {"100"}}
+			if fqn != "" {
+				q.Set("fqn", fqn)
+			}
+			var page listIntegrationsResponse[T]
+			if err := c.do(ctx, http.MethodGet, integrationsPath, q, nil, &page); err != nil {
+				return nil, err
+			}
+			all = append(all, page.Data...)
+			offset += len(page.Data)
+			if len(page.Data) == 0 || offset >= page.Pagination.Total {
+				break
+			}
+		}
+		c.setListCache(key, all)
+		return all, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]T), nil
+}
+
+func (c *Client) getListCache(key string) (any, bool) {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	v, ok := c.listCache[key]
+	return v, ok
+}
+
+func (c *Client) setListCache(key string, v any) {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	c.listCache[key] = v
+}
+
+func (c *Client) invalidateListCache() {
+	c.listMu.Lock()
+	defer c.listMu.Unlock()
+	c.listCache = map[string]any{}
 }
 
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, in, out any) error {

@@ -2,7 +2,10 @@ package client_test
 
 import (
 	"context"
+	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Staffbase/terraform-provider-truefoundry/internal/client"
@@ -151,5 +154,92 @@ func TestUnauthorized(t *testing.T) {
 	apiErr, ok := err.(*client.APIError)
 	if !ok || apiErr.StatusCode != 401 {
 		t.Errorf("wrong key: err = %v, want APIError 401", err)
+	}
+}
+
+// countingServer wraps a mockcp server counting every GET to
+// /api/svc/v1/provider-integrations, to observe how many times
+// ListModelIntegrations actually reaches the network.
+func countingServer(t *testing.T) (*client.Client, *mockcp.Server, *atomic.Int64) {
+	t.Helper()
+	mock := mockcp.New(testAPIKey)
+	var listCalls atomic.Int64
+	handler := mock.Handler()
+	counting := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/svc/v1/provider-integrations" {
+			listCalls.Add(1)
+		}
+		handler.ServeHTTP(w, r)
+	})
+	srv := httptest.NewServer(counting)
+	t.Cleanup(srv.Close)
+	c, err := client.New(srv.URL, testAPIKey, "test")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	return c, mock, &listCalls
+}
+
+// TestListModelIntegrationsCachedPerClient reproduces the many-resources
+// perf problem this cache fixes: several resources of the same
+// integration-backed type each independently calling ListModelIntegrations
+// within one provider run (one Client) must not each hit the network - see
+// Client's doc comment.
+func TestListModelIntegrationsCachedPerClient(t *testing.T) {
+	c, _, listCalls := countingServer(t)
+	ctx := context.Background()
+	if _, err := c.Apply(ctx, testManifest("acct-a", "gpt-4o"), false); err != nil {
+		t.Fatal(err)
+	}
+	listCalls.Store(0) // only count calls from here on
+
+	const readers = 5
+	var wg sync.WaitGroup
+	errs := make(chan error, readers)
+	for range readers {
+		wg.Go(func() {
+			if _, err := c.ListModelIntegrations(ctx, ""); err != nil {
+				errs <- err
+			}
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatalf("ListModelIntegrations: %v", err)
+	}
+	if got := listCalls.Load(); got != 1 {
+		t.Errorf("%d concurrent readers caused %d list requests, want 1 (singleflight should collapse them)", readers, got)
+	}
+
+	if _, err := c.ListModelIntegrations(ctx, ""); err != nil {
+		t.Fatalf("ListModelIntegrations (cached): %v", err)
+	}
+	if got := listCalls.Load(); got != 1 {
+		t.Errorf("repeat call after warm cache caused a request: %d list requests, want still 1", got)
+	}
+
+	if _, err := c.Apply(ctx, testManifest("acct-a", "gpt-4o", "gpt-4o-mini"), true /* dryRun */); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ListModelIntegrations(ctx, ""); err != nil {
+		t.Fatalf("ListModelIntegrations (after dry-run apply): %v", err)
+	}
+	if got := listCalls.Load(); got != 1 {
+		t.Errorf("dry-run apply should not invalidate the cache: %d list requests, want still 1", got)
+	}
+
+	if _, err := c.Apply(ctx, testManifest("acct-a", "gpt-4o", "gpt-4o-mini"), false); err != nil {
+		t.Fatal(err)
+	}
+	all, err := c.ListModelIntegrations(ctx, "")
+	if err != nil {
+		t.Fatalf("ListModelIntegrations (after real apply): %v", err)
+	}
+	if got := listCalls.Load(); got != 2 {
+		t.Errorf("real apply should invalidate the cache: %d list requests, want 2", got)
+	}
+	if len(all) != 2 {
+		t.Errorf("got %d integrations after update, want 2 (cache must reflect the update, not stale data)", len(all))
 	}
 }
