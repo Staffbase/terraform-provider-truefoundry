@@ -55,7 +55,7 @@ resource "truefoundry_prompt" "ticket_triage" {
 
 - `messages` (Attributes List) The message template, in order. Message contents may reference variables as {{name}}. (see [below for nested schema](#nestedatt--messages))
 - `ml_repo` (String) Name of the ML repo the prompt lives in. It must exist on the tenant. Changing it replaces the prompt.
-- `name` (String) Name of the prompt (must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the prompt.
+- `name` (String) Name of the prompt (lowercase alphanumeric and hyphens). Changing it replaces the prompt.
 
 ### Optional
 

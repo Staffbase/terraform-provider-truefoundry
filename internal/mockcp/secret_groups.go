@@ -18,8 +18,10 @@ type secretGroup struct {
 
 // secretGroupNameRe is the secret group name pattern, verified against a live
 // control plane on 2026-09-08: "^(?!.*--)[a-z][a-z0-9-]{3,48}[a-z0-9]$"; RE2
-// has no lookahead, so the "no consecutive hyphens" rule is written as an
-// alternation and the length bound (5-50) is checked separately.
+// has no lookahead, so the "no consecutive hyphens" rule is instead expressed
+// by only ever allowing a hyphen directly before an alphanumeric (an
+// optional-hyphen group repeated, not an alternation); the length bound
+// (5-50) is checked separately.
 var secretGroupNameRe = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
 // isSecretGroupType reports whether typ is the secret group manifest type.

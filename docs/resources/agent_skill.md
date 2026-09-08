@@ -57,7 +57,7 @@ resource "truefoundry_agent" "support_triage" {
 ### Required
 
 - `ml_repo` (String) Name of the ML repo the skill lives in. It must exist on the tenant. Changing it replaces the skill.
-- `name` (String) Name of the agent skill (must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the skill.
+- `name` (String) Name of the agent skill (lowercase alphanumeric and hyphens). Changing it replaces the skill.
 - `source` (Attributes) Where the skill's content comes from. `type` selects the variant; the other fields belong to one variant each. (see [below for nested schema](#nestedatt--source))
 
 ### Read-Only

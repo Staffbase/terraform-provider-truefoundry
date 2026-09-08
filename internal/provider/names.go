@@ -15,14 +15,29 @@ var (
 	// above), so it never matches fewer than 3 characters on its own.
 	nameRegexp = regexp.MustCompile(`^[a-z][a-z0-9-]+[a-z0-9]$`)
 
-	// mlRepoNameRegexp mirrors "^[a-zA-Z][a-zA-Z0-9\-]{1,98}[a-zA-Z0-9]$":
-	// ML repo names may contain upper case, unlike other manifest names.
+	// mlRepoNameRegexp is the shape of "^[a-zA-Z][a-zA-Z0-9\-]{1,98}[a-zA-Z0-9]$"
+	// (ML repo names may contain upper case, unlike other manifest names); the
+	// regex itself only enforces the minimum (3 characters), not the 98-char
+	// upper bound on the middle segment — that is checked separately via
+	// maxMlRepoNameLen.
 	mlRepoNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]+[a-zA-Z0-9]$`)
 
-	// secretGroupNameRegexp mirrors "^(?!.*--)[a-z][a-z0-9-]{3,48}[a-z0-9]$".
-	// RE2 has no lookahead, so the "no consecutive hyphens" rule is expressed
-	// as an alternation instead.
+	// secretGroupNameRegexp is the shape of
+	// "^(?!.*--)[a-z][a-z0-9-]{3,48}[a-z0-9]$". RE2 has no lookahead, so the
+	// "no consecutive hyphens" rule is instead expressed by only ever allowing
+	// a hyphen directly before an alphanumeric (an optional-hyphen group
+	// repeated, not an alternation); the 5-50 length bound is checked
+	// separately via minSecretGroupNameLen/maxSecretGroupNameLen.
 	secretGroupNameRegexp = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
+
+	// artifactNameRegexp validates truefoundry_prompt and
+	// truefoundry_agent_skill names. Deliberately kept permissive: unlike
+	// every other family in this file, prompt-versions/agent-skill-versions
+	// ignore dryRun and persist on apply, so their real name limit can never
+	// be safely probed (see AGENTS.md "Manifest name rules") — tightening
+	// this to nameRegexp's control-plane-verified shape would risk rejecting
+	// configurations the real API accepts.
+	artifactNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 )
 
 // Verified name length bounds per manifest family. Names shorter than

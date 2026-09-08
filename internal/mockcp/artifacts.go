@@ -115,12 +115,12 @@ func (s *Server) DeletePromptByName(name string) {
 var mlRepoNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{1,98}[a-zA-Z0-9]$`)
 
 // artifactNameRe mirrors the provider's own agent-skill/prompt name
-// validator (internal/provider/names.go's nameRegexp), not a pattern read
-// off the real control plane: those two families' apply endpoints ignore
-// dryRun and persist, so they must never be probed with a valid manifest
-// (see AGENTS.md "Manifest name rules"). Enforcing it here at least keeps
-// the mock in sync with the provider's own client-side rule.
-var artifactNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]+[a-z0-9]$`)
+// validator (internal/provider/names.go's artifactNameRegexp), not a pattern
+// read off the real control plane: those two families' apply endpoints
+// ignore dryRun and persist, so they must never be probed with a valid
+// manifest (see AGENTS.md "Manifest name rules"). Kept deliberately
+// permissive, like the provider-side validator it mirrors.
+var artifactNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
 // handleApplyMlRepo implements PUT /api/svc/v1/ml-repos: create an ML repo
 // or update an existing one in place (same name keeps the same ID).
