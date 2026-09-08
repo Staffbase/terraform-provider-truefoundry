@@ -23,8 +23,6 @@ type role struct {
 
 // roleNameRe is the role name pattern, verified against a live control plane
 // on 2026-09-08: "^[a-z][a-z0-9\\-]{1,33}[a-z0-9]$", i.e. 3-35 characters.
-// The comment below records what the real control plane's pattern has
-// not been observed yet, so this mirrors the provider's own name validator.
 var roleNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,33}[a-z0-9]$`)
 
 // rolePermissions is the permission vocabulary the real control plane

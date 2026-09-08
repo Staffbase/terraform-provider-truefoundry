@@ -10,12 +10,14 @@ import "regexp"
 // the gateway config manifests are not name-validated at all.
 var (
 	// nameRegexp is the control plane's manifest name shape: a lowercase
-	// letter first, a lowercase letter or digit last, hyphens in between.
-	nameRegexp = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
+	// letter first, a lowercase letter or digit last, at least one
+	// alphanumeric-or-hyphen character in between (the "{1,N}" in the shape
+	// above), so it never matches fewer than 3 characters on its own.
+	nameRegexp = regexp.MustCompile(`^[a-z][a-z0-9-]+[a-z0-9]$`)
 
 	// mlRepoNameRegexp mirrors "^[a-zA-Z][a-zA-Z0-9\-]{1,98}[a-zA-Z0-9]$":
 	// ML repo names may contain upper case, unlike other manifest names.
-	mlRepoNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$`)
+	mlRepoNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]+[a-zA-Z0-9]$`)
 
 	// secretGroupNameRegexp mirrors "^(?!.*--)[a-z][a-z0-9-]{3,48}[a-z0-9]$".
 	// RE2 has no lookahead, so the "no consecutive hyphens" rule is expressed

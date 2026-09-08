@@ -102,7 +102,7 @@ func (r *promptResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the prompt (lowercase alphanumeric and hyphens). Changing it replaces the prompt.",
+				Description: "Name of the prompt (must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the prompt.",
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
 					stringvalidator.RegexMatches(nameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens"),
