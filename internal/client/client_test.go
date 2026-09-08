@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Staffbase/terraform-provider-truefoundry/internal/client"
 	"github.com/Staffbase/terraform-provider-truefoundry/internal/mockcp"
@@ -335,4 +336,107 @@ func findByName[T any](t *testing.T, items []T, name string, nameOf func(T) stri
 	t.Fatalf("no entry named %q in %+v", name, items)
 	var zero T
 	return zero
+}
+
+// TestListModelIntegrationsPostInvalidationCallerDoesNotJoinStaleFetch
+// reproduces the race review found after the epoch fix: a caller after a
+// real Apply/Delete must never join (and receive the result of) a fetch
+// that a pre-invalidation caller already has in flight - it must start its
+// own, current-epoch fetch instead. Without the epoch folded into the
+// singleflight key, both callers would share the same key and the
+// post-invalidation caller would block on, and return, the pre-mutation
+// snapshot.
+func TestListModelIntegrationsPostInvalidationCallerDoesNotJoinStaleFetch(t *testing.T) {
+	mock := mockcp.New(testAPIKey)
+	realHandler := mock.Handler()
+
+	var gateOnce sync.Once
+	seen := make(chan struct{})
+	release := make(chan struct{})
+	gated := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/api/svc/v1/provider-integrations" {
+			gatedThisCall := false
+			gateOnce.Do(func() { gatedThisCall = true })
+			if gatedThisCall {
+				// Capture the response now (reflecting account state at this
+				// exact moment, before the test's Apply below runs), then
+				// hold delivery until release - simulating a slow first
+				// fetch that is still in flight when a later caller arrives.
+				rec := httptest.NewRecorder()
+				realHandler.ServeHTTP(rec, r)
+				close(seen)
+				<-release
+				for k, vv := range rec.Header() {
+					for _, v := range vv {
+						w.Header().Add(k, v)
+					}
+				}
+				w.WriteHeader(rec.Code)
+				_, _ = w.Write(rec.Body.Bytes())
+				return
+			}
+		}
+		realHandler.ServeHTTP(w, r)
+	})
+	srv := httptest.NewServer(gated)
+	t.Cleanup(srv.Close)
+	c, err := client.New(srv.URL, testAPIKey, "test")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	ctx := context.Background()
+
+	if _, err := c.Apply(ctx, testManifest("acct-a", "m1"), false); err != nil {
+		t.Fatalf("initial Apply: %v", err)
+	}
+
+	type result struct {
+		all []client.ProviderIntegration
+		err error
+	}
+	staleCall := make(chan result, 1)
+	go func() {
+		all, err := c.ListModelIntegrations(ctx, "")
+		staleCall <- result{all, err}
+	}()
+
+	<-seen // the first (pre-invalidation) fetch is now in flight, gated
+
+	if _, err := c.Apply(ctx, testManifest("acct-a", "m1", "m2"), false); err != nil {
+		t.Fatalf("invalidating Apply: %v", err)
+	}
+
+	freshCall := make(chan result, 1)
+	go func() {
+		all, err := c.ListModelIntegrations(ctx, "")
+		freshCall <- result{all, err}
+	}()
+
+	// The post-invalidation caller must resolve on its own, current-epoch
+	// fetch - it must not be blocked waiting on the gated pre-invalidation
+	// fetch's release. A generous but bounded timeout: this must be fast
+	// (a real, ungated request against an in-memory mock), and if it's
+	// actually stuck joining the stale fetch, it would otherwise hang until
+	// the test binary's own deadline.
+	select {
+	case r := <-freshCall:
+		if r.err != nil {
+			t.Fatalf("post-invalidation ListModelIntegrations: %v", r.err)
+		}
+		if len(r.all) != 2 {
+			t.Errorf("post-invalidation ListModelIntegrations returned %d integrations, want 2 (m1, m2)", len(r.all))
+		}
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("post-invalidation call did not return independently - it joined the stale pre-invalidation in-flight fetch (regression)")
+	}
+
+	close(release)
+	stale := <-staleCall
+	if stale.err != nil {
+		t.Fatalf("pre-invalidation ListModelIntegrations: %v", stale.err)
+	}
+	if len(stale.all) != 1 {
+		t.Errorf("pre-invalidation ListModelIntegrations returned %d integrations, want 1 (its own frozen snapshot)", len(stale.all))
+	}
 }
