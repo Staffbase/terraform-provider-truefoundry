@@ -371,21 +371,29 @@ func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fq
 	if cached, ok := c.getListCache(key); ok {
 		return cached.([]T), nil
 	}
-	// epoch is captured once, before DoChan, and folded into the
-	// singleflight key itself (not just the cache-write guard below): a
-	// caller after an invalidation always reads the new epoch, so it always
-	// gets its own singleflight entry instead of joining a fetch that a
-	// pre-invalidation caller already has in flight under the old epoch's
-	// key. Without this, "later Read never sees stale data" (see Client's
-	// doc comment) didn't hold - a post-invalidation caller could still
-	// join, and receive the result of, a pre-invalidation fetch, since a
-	// bare integrationType|fqn key doesn't change across invalidations.
-	epoch := c.currentListEpoch()
-	sfKey := fmt.Sprintf("%s|%d", key, epoch)
+	// keyEpoch is captured once, before DoChan, and folded into the
+	// singleflight key itself (not the cache key): a caller after an
+	// invalidation always reads the new epoch, so it always gets its own
+	// singleflight entry instead of joining a fetch that a pre-invalidation
+	// caller already has in flight under the old epoch's key. Without this,
+	// "later Read never sees stale data" (see Client's doc comment) didn't
+	// hold - a post-invalidation caller could still join, and receive the
+	// result of, a pre-invalidation fetch, since a bare integrationType|fqn
+	// key doesn't change across invalidations.
+	keyEpoch := c.currentListEpoch()
+	sfKey := fmt.Sprintf("%s|%d", key, keyEpoch)
 	ch := c.listGroup.DoChan(sfKey, func() (any, error) {
 		if cached, ok := c.getListCache(key); ok {
 			return cached, nil
 		}
+		// Re-read right before the fetch starts (shadowing keyEpoch, which
+		// only needs to be fixed early enough to build sfKey above): using
+		// the freshest epoch here - instead of keyEpoch - means an
+		// invalidation that already landed before this singleflight leader
+		// got scheduled doesn't needlessly block caching a result that's
+		// fresh anyway; only an invalidation racing the fetch itself (below)
+		// still does.
+		epoch := c.currentListEpoch()
 		var all []T
 		offset := 0
 		for {
@@ -406,11 +414,6 @@ func listIntegrations[T any](ctx context.Context, c *Client, integrationType, fq
 				break
 			}
 		}
-		// epoch is the one folded into sfKey above, so it's necessarily
-		// still current for every joiner of this exact fetch - a further
-		// invalidation after this fetch started (mid-flight) is what this
-		// guards against, not one that already happened before dispatch
-		// (that's already reflected in epoch itself).
 		c.setListCacheIfEpoch(key, all, epoch)
 		return all, nil
 	})
