@@ -40,8 +40,11 @@ var (
 	artifactNameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 )
 
-// Verified name length bounds per manifest family. Names shorter than
-// minNameLen cannot satisfy the patterns above.
+// Verified name length bounds per manifest family. minNameLen is the lower
+// bound for every family that shares nameRegexp (which alone already rejects
+// anything shorter than 3 characters); secret groups and prompt/agent-skill
+// artifacts use their own regexes and bounds, defined with their own
+// constants below and enforced separately from these.
 const (
 	minNameLen = 3
 

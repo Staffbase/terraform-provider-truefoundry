@@ -44,7 +44,11 @@ func (s *Server) DeleteSecretGroupByName(name string) {
 
 // applySecretGroup stores a secret group keyed by name.
 func (s *Server) applySecretGroup(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
-	if !secretGroupNameRe.MatchString(name) || len(name) < 5 || len(name) > 50 {
+	if len(name) < 5 || len(name) > 50 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: SecretGroupManifest /name: string length must be between 5 and 50"})
+		return
+	}
+	if !secretGroupNameRe.MatchString(name) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: SecretGroupManifest /name: must match pattern %q", secretGroupNameRe.String())})
 		return
 	}
