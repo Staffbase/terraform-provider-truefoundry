@@ -167,7 +167,20 @@ resource "truefoundry_azure_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile(`lowercase alphanumeric`),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
+		},
+		{
+			// Blob storage accounts accept 36 characters, one more is too many.
+			name: "name too long",
+			config: `
+resource "truefoundry_azure_account" "bad" {
+  name = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc"
+  blob_storages = [
+    { name = "b1", storage_root = "https://a.blob.core.windows.net/c" },
+  ]
+}
+`,
+			want: regexp.MustCompile(`string length must be between 3 and 36`),
 		},
 	}
 	for _, tc := range cases {

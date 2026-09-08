@@ -87,7 +87,7 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 
 ### Required
 
-- `name` (String) Name of the load balancing config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the load balancing config.
 - `rules` (Attributes Set) Load balancing rules, normally scoped so that at most one matches a given request. This is a set: the order rules are written in carries no meaning, and which rule wins when several match is up to the control plane. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only

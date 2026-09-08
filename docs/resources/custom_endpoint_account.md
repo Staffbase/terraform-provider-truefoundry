@@ -65,7 +65,7 @@ resource "truefoundry_custom_endpoint_account" "internal_llm" {
 ### Required
 
 - `endpoints` (Attributes List) Upstream endpoints proxied through this account. (see [below for nested schema](#nestedatt--endpoints))
-- `name` (String) Name of the custom endpoint account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
+- `name` (String) Name of the custom endpoint account (3-32 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the account.
 
 ### Optional
 

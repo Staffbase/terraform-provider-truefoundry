@@ -200,6 +200,10 @@ func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name is required"})
 		return
 	}
+	if !accountNameRe.MatchString(name) || len(name) < 3 || len(name) > 36 {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": fmt.Sprintf("name must be 3-36 characters and match %q", accountNameRe.String())})
+		return
+	}
 	if _, ok := req.Manifest["permissions"].([]any); !ok {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "permissions are required"})
 		return
@@ -296,7 +300,7 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	typ, _ := req.Manifest["type"].(string)
 	name, _ := req.Manifest["name"].(string)
 	if isGatewayConfigType(typ) {
-		s.applyGatewayConfig(w, typ, name, req.Manifest, req.DryRun)
+		s.applyGatewayConfig(w, typ, req.Manifest, req.DryRun)
 		return
 	}
 	if isBudgetV2Type(typ) {
@@ -319,8 +323,8 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": fmt.Sprintf("unsupported manifest type %q", typ)})
 		return
 	}
-	if len(name) < 3 || len(name) > 32 {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name must be 3-32 characters"})
+	if msg := validateAccountName(typ, name); msg != "" {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": msg})
 		return
 	}
 	if msg := validateManifest(typ, req.Manifest); msg != "" {
@@ -407,6 +411,35 @@ func (s *Server) applyMcpServer(w http.ResponseWriter, typ, name string, manifes
 			"proxyUrl": "{{mcpProxyBaseURL}}/" + Tenant + "/mcp/" + name + "/server",
 		},
 	})
+}
+
+// accountNameRe is the provider account name pattern the real control plane
+// enforces: "^[a-z][a-z0-9\\-]{1,N}[a-z0-9]$" for every account type, with N
+// depending on the type (see maxAccountNameLenFor).
+var accountNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
+
+// maxAccountNameLenFor is the longest name each provider account type accepts,
+// read off a live control plane on 2026-09-08 with dryRun applies.
+func maxAccountNameLenFor(typ string) int {
+	switch typ {
+	case "provider-account/virtual-model":
+		return 64
+	case "provider-account/azure", "provider-account/hashicorp", "provider-account/slack",
+		"provider-account/guardrail-config-group":
+		return 36
+	default:
+		return 32
+	}
+}
+
+// validateAccountName returns a non-empty message when name violates the
+// pattern or the type's length bound.
+func validateAccountName(typ, name string) string {
+	max := maxAccountNameLenFor(typ)
+	if !accountNameRe.MatchString(name) || len(name) < 3 || len(name) > max {
+		return fmt.Sprintf("name must be 3-%d characters and match %q", max, accountNameRe.String())
+	}
+	return ""
 }
 
 // mcpServerNameRe is the MCP server name pattern the real control plane
@@ -852,13 +885,11 @@ func (s *Server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 // applyGatewayConfig stores a tenant-wide gateway config (e.g.
 // "gateway-budget-config") keyed by its manifest type.
-func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
-	// gateway-global-settings and gateway-otel-config are the gateway config
-	// manifests without a name field.
-	if typ != "gateway-global-settings" && typ != "gateway-otel-config" && (len(name) < 3 || len(name) > 32) {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "name must be 3-32 characters"})
-		return
-	}
+// The real control plane applies no name pattern or length rule to gateway
+// config manifests at all (verified 2026-09-08: 1- and 300-character names are
+// both accepted), so neither does the mock — hence no name parameter.
+func (s *Server) applyGatewayConfig(w http.ResponseWriter, typ string, manifest map[string]any, dryRun bool) {
+	name, _ := manifest["name"].(string)
 	var msg string
 	switch typ {
 	case "gateway-budget-config":

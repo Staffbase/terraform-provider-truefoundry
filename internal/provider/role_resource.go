@@ -117,10 +117,10 @@ func (r *roleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the role (lowercase alphanumeric and hyphens), unique within the tenant. Changing it replaces the role.",
+				Description: "Name of the role (3-35 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens), unique within the tenant. Changing it replaces the role.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 64),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthBetween(minNameLen, maxRoleNameLen),
+					stringvalidator.RegexMatches(nameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

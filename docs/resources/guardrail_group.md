@@ -56,7 +56,7 @@ resource "truefoundry_guardrail_group" "region" {
 ### Required
 
 - `guardrails` (Attributes List) Guardrail configs in this group. (see [below for nested schema](#nestedatt--guardrails))
-- `name` (String) Name of the guardrail config group (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the group.
+- `name` (String) Name of the guardrail config group (3-36 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the group.
 
 ### Optional
 

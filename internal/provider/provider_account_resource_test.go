@@ -244,7 +244,46 @@ resource "truefoundry_provider_account" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile(`lowercase alphanumeric`),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
+		},
+		{
+			// The control plane caps non-virtual-model account names at 32.
+			name: "name too long for provider type",
+			config: `
+resource "truefoundry_provider_account" "bad" {
+  name    = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc"
+  api_key = "sk"
+  models = [
+    {
+      name        = "gpt-4o"
+      model_id    = "gpt-4o"
+      model_types = ["chat"]
+    },
+  ]
+}
+`,
+			want: regexp.MustCompile(`at most 32 characters`),
+		},
+		{
+			// virtual-model allows 64, but not 65.
+			name: "virtual model name too long",
+			config: `
+resource "truefoundry_provider_account" "bad" {
+  provider_type = "virtual-model"
+  name          = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc"
+  models = [
+    {
+      name        = "router"
+      model_types = ["chat"]
+      routing = {
+        type    = "weight-based-routing"
+        targets = [{ target = "openai-main/gpt-4o", weight = 100 }]
+      }
+    },
+  ]
+}
+`,
+			want: regexp.MustCompile(`string length must be between 3 and 64`),
 		},
 	}
 	for _, tc := range cases {

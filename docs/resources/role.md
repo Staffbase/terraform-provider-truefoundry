@@ -73,7 +73,7 @@ resource "truefoundry_role" "member" {
 ### Required
 
 - `display_name` (String) Human-readable name shown in the TrueFoundry UI.
-- `name` (String) Name of the role (lowercase alphanumeric and hyphens), unique within the tenant. Changing it replaces the role.
+- `name` (String) Name of the role (3-35 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens), unique within the tenant. Changing it replaces the role.
 - `permissions` (Set of String) Permissions the role grants, as `<entity>:<Action>` (e.g. `provider-account:UseIntegrations`). At least one is required. The accepted set is fixed by the control plane; if a control plane upgrade adds a permission this provider rejects, open an issue.
 - `resource_type` (String) Scope of the role: `tenant` for a role assignable across the whole tenant, `team` for one assignable within a team. The control plane also accepts the legacy alias `account` and stores it as `tenant` — write `tenant`. Changing the scope of an existing role is rejected by the control plane; remove and re-add the resource instead of expecting an in-place change.
 

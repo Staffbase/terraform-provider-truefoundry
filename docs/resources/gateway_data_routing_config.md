@@ -56,7 +56,7 @@ resource "truefoundry_gateway_data_routing_config" "routing" {
 ### Required
 
 - `default` (Attributes) Storage for data not matched by any destination. (see [below for nested schema](#nestedatt--default))
-- `name` (String) Name of the data routing config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the data routing config.
 
 ### Optional
 

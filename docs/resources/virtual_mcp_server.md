@@ -47,7 +47,7 @@ resource "truefoundry_virtual_mcp_server" "docs" {
 ### Required
 
 - `description` (String) Human-readable description shown to gateway users and AI agents.
-- `name` (String) Name of the virtual MCP server (3-73 characters, lowercase alphanumeric and hyphens). Changing it replaces the server.
+- `name` (String) Name of the virtual MCP server (3-73 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the server.
 - `servers` (Attributes List) MCP servers aggregated by this virtual server, referenced by name. (see [below for nested schema](#nestedatt--servers))
 
 ### Optional

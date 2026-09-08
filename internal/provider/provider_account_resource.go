@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -30,9 +29,6 @@ var (
 	_ resource.ResourceWithValidateConfig = (*providerAccountResource)(nil)
 	_ resource.ResourceWithImportState    = (*providerAccountResource)(nil)
 )
-
-// nameRegexp matches the naming rule documented for provider accounts.
-var nameRegexp = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
 // providerTypeValues are the supported provider account types.
 var providerTypeValues = []string{"openai", "azure-openai", "azure-foundry", "virtual-model", "aws-bedrock"}
@@ -133,10 +129,10 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the provider account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.",
+				Description: "Name of the provider account (3-32 characters, or 3-64 for `virtual-model`; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the account.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 32),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthBetween(minNameLen, maxVirtualModelNameLen),
+					stringvalidator.RegexMatches(nameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
@@ -359,6 +355,15 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 			resp.Diagnostics.AddAttributeError(path.Root("models"), "Invalid model configuration",
 				fmt.Sprintf("`%s` of model %q %s for provider_type %q.", attr, name, why, providerType))
 		}
+	}
+
+	// The control plane caps account names at 32 characters for every provider
+	// type except virtual-model, which allows 64. The schema validator has to
+	// permit the wider bound, so the narrow one is enforced here.
+	if providerType != "virtual-model" && len(config.Name.ValueString()) > maxAccountNameLen {
+		resp.Diagnostics.AddAttributeError(path.Root("name"), "Invalid provider account configuration",
+			fmt.Sprintf("`name` must be at most %d characters for provider_type %q (only %q allows up to %d).",
+				maxAccountNameLen, providerType, "virtual-model", maxVirtualModelNameLen))
 	}
 
 	switch providerType {

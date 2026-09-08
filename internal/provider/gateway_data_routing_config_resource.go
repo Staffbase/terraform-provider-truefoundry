@@ -125,10 +125,9 @@ func (r *gatewayDataRoutingConfigResource) Schema(_ context.Context, _ resource.
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the data routing config (3-32 characters, lowercase alphanumeric and hyphens).",
+				Description: "Name of the data routing config.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 32),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"default": schema.SingleNestedAttribute{

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -108,6 +109,19 @@ func (s *Server) DeletePromptByName(name string) {
 	delete(s.prompts, name)
 }
 
+// mlRepoNameRe is the ML repo name pattern of the real control plane,
+// "^[a-zA-Z][a-zA-Z0-9\\-]{1,98}[a-zA-Z0-9]$" (3-100 characters). ML repo
+// names accept upper case, like tenant/team budget config names do.
+var mlRepoNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{1,98}[a-zA-Z0-9]$`)
+
+// artifactNameRe mirrors the provider's own agent-skill/prompt name
+// validator (internal/provider/names.go's artifactNameRegexp), not a pattern
+// read off the real control plane: those two families' apply endpoints
+// ignore dryRun and persist, so they must never be probed with a valid
+// manifest (see AGENTS.md "Manifest name rules"). Kept deliberately
+// permissive, like the provider-side validator it mirrors.
+var artifactNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+
 // handleApplyMlRepo implements PUT /api/svc/v1/ml-repos: create an ML repo
 // or update an existing one in place (same name keeps the same ID).
 func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +136,10 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: MlRepoManifest : must have required property 'name'"})
+		return
+	}
+	if !mlRepoNameRe.MatchString(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: MlRepoManifest /name: must match pattern %q", mlRepoNameRe.String())})
 		return
 	}
 	if _, ok := req["collaborators"].([]any); !ok {
@@ -348,6 +366,10 @@ func requireArtifactNames(w http.ResponseWriter, manifest map[string]any) (name,
 	mlRepoName, _ = manifest["ml_repo"].(string)
 	if name == "" || mlRepoName == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ML Repo name and artifact name both are required to apply manifest"})
+		return "", "", false
+	}
+	if !artifactNameRe.MatchString(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: name must match pattern %q", artifactNameRe.String())})
 		return "", "", false
 	}
 	return name, mlRepoName, true

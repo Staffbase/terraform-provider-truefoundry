@@ -89,10 +89,9 @@ func (r *gatewayLoadBalancingConfigResource) Schema(_ context.Context, _ resourc
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the load balancing config (3-32 characters, lowercase alphanumeric and hyphens).",
+				Description: "Name of the load balancing config.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 32),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"rules": schema.SetNestedAttribute{

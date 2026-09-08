@@ -81,12 +81,12 @@ func (r *secretGroupResource) Schema(_ context.Context, _ resource.SchemaRequest
 			},
 			"name": schema.StringAttribute{
 				Required: true,
-				Description: "Name of the secret group (lowercase alphanumeric and hyphens), unique within the tenant. " +
+				Description: "Name of the secret group (5-50 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens, no consecutive hyphens), unique within the tenant. " +
 					"**Changing it replaces the group, which deletes every secret stored in it** — the secrets are " +
 					"created out of band and Terraform cannot recreate them.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(1, 64),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthBetween(minSecretGroupNameLen, maxSecretGroupNameLen),
+					stringvalidator.RegexMatches(secretGroupNameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and single hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

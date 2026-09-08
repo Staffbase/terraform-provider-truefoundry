@@ -16,10 +16,13 @@ type secretGroup struct {
 	manifest map[string]any
 }
 
-// secretGroupNameRe is the secret group name pattern. The real control
-// plane's pattern has not been observed yet, so this mirrors the provider's
-// own name validator.
-var secretGroupNameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
+// secretGroupNameRe is the secret group name pattern, verified against a live
+// control plane on 2026-09-08: "^(?!.*--)[a-z][a-z0-9-]{3,48}[a-z0-9]$"; RE2
+// has no lookahead, so the "no consecutive hyphens" rule is instead expressed
+// by only ever allowing a hyphen directly before an alphanumeric (an
+// optional-hyphen group repeated, not an alternation); the length bound
+// (5-50) is checked separately.
+var secretGroupNameRe = regexp.MustCompile(`^[a-z](-?[a-z0-9])*$`)
 
 // isSecretGroupType reports whether typ is the secret group manifest type.
 func isSecretGroupType(typ string) bool { return typ == "secret-group" }
@@ -41,6 +44,10 @@ func (s *Server) DeleteSecretGroupByName(name string) {
 
 // applySecretGroup stores a secret group keyed by name.
 func (s *Server) applySecretGroup(w http.ResponseWriter, typ, name string, manifest map[string]any, dryRun bool) {
+	if len(name) < 5 || len(name) > 50 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: SecretGroupManifest /name: string length must be between 5 and 50"})
+		return
+	}
 	if !secretGroupNameRe.MatchString(name) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: SecretGroupManifest /name: must match pattern %q", secretGroupNameRe.String())})
 		return

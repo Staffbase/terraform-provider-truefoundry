@@ -66,7 +66,7 @@ resource "truefoundry_gateway_data_access_config" "access" {
 
 ### Required
 
-- `name` (String) Name of the data access config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the data access config.
 - `rules` (Attributes Set) Data access rules; a subject sees data allowed by any matching rule. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only

@@ -105,7 +105,7 @@ func (r *promptResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Description: "Name of the prompt (lowercase alphanumeric and hyphens). Changing it replaces the prompt.",
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.RegexMatches(artifactNameRegexp, "must be lowercase alphanumeric with hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
