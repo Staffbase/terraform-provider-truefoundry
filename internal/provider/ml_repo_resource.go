@@ -61,10 +61,10 @@ func (r *mlRepoResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the ML repo (lowercase alphanumeric and hyphens). Changing it replaces the repo.",
+				Description: "Name of the ML repo (3-100 characters; must start with a letter, end with a letter or digit, and contain only letters, digits and hyphens — upper case is allowed here, unlike other manifest names). Changing it replaces the repo.",
 				Validators: []validator.String{
-					stringvalidator.LengthAtLeast(1),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthBetween(minNameLen, maxMlRepoNameLen),
+					stringvalidator.RegexMatches(mlRepoNameRegexp, "must start with a letter, end with a letter or digit, and contain only letters, digits and hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

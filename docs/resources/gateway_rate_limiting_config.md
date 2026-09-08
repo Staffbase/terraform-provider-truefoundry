@@ -69,7 +69,7 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 
 ### Required
 
-- `name` (String) Name of the rate limiting config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the rate limiting config.
 - `rules` (Attributes Set) Rate limiting rules. Every matching rule is enforced and a request is rejected if any of them is over its limit; order is not significant. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only

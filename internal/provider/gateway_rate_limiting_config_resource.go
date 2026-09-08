@@ -101,10 +101,9 @@ func (r *gatewayRateLimitingConfigResource) Schema(_ context.Context, _ resource
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the rate limiting config (3-32 characters, lowercase alphanumeric and hyphens).",
+				Description: "Name of the rate limiting config.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 32),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"rules": schema.SetNestedAttribute{

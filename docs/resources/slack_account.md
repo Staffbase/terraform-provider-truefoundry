@@ -40,7 +40,7 @@ resource "truefoundry_slack_account" "notifications" {
 
 ### Required
 
-- `name` (String) Name of the Slack account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
+- `name` (String) Name of the Slack account (3-36 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the account.
 
 ### Optional
 

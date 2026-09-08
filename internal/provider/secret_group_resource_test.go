@@ -200,7 +200,27 @@ resource "truefoundry_secret_group" "bad" {
   name            = "Bad_Name"
   integration_fqn = "mock-tenant:truefoundry:store:secret-store:store"
 }`,
-			want: regexp.MustCompile(`must be lowercase alphanumeric with hyphens`),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
+		},
+		{
+			// Secret group names are the only ones with a minimum above 3.
+			name: "name too short",
+			config: `
+resource "truefoundry_secret_group" "bad" {
+  name            = "abcd"
+  integration_fqn = "mock-tenant:truefoundry:store:secret-store:store"
+}`,
+			want: regexp.MustCompile(`string length must be between 5 and 50`),
+		},
+		{
+			// ... and the only ones rejecting consecutive hyphens.
+			name: "consecutive hyphens in name",
+			config: `
+resource "truefoundry_secret_group" "bad" {
+  name            = "group--one"
+  integration_fqn = "mock-tenant:truefoundry:store:secret-store:store"
+}`,
+			want: regexp.MustCompile(`single hyphens`),
 		},
 	}
 

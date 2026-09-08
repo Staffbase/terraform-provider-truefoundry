@@ -139,7 +139,7 @@ resource "truefoundry_provider_account" "virtual" {
 ### Required
 
 - `models` (Attributes Set) Models exposed on the gateway through this provider account. Order is not significant. (see [below for nested schema](#nestedatt--models))
-- `name` (String) Name of the provider account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
+- `name` (String) Name of the provider account (3-32 characters, or 3-64 for `virtual-model`; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the account.
 
 ### Optional
 

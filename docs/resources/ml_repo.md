@@ -46,7 +46,7 @@ resource "truefoundry_ml_repo" "gateway_artifacts" {
 
 ### Required
 
-- `name` (String) Name of the ML repo (lowercase alphanumeric and hyphens). Changing it replaces the repo.
+- `name` (String) Name of the ML repo (3-100 characters; must start with a letter, end with a letter or digit, and contain only letters, digits and hyphens — upper case is allowed here, unlike other manifest names). Changing it replaces the repo.
 - `storage_integration_fqn` (String) FQN of the blob storage integration backing the repo, e.g. of a `truefoundry_azure_account` integration: my-tenant:azure:my-account:blob-storage:my-storage. Artifacts already written cannot move, so changing it replaces the repo.
 
 ### Optional

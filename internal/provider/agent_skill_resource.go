@@ -86,7 +86,7 @@ func (r *agentSkillResource) Schema(_ context.Context, _ resource.SchemaRequest,
 				Description: "Name of the agent skill (lowercase alphanumeric and hyphens). Changing it replaces the skill.",
 				Validators: []validator.String{
 					stringvalidator.LengthAtLeast(1),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.RegexMatches(nameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

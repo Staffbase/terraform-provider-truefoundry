@@ -114,7 +114,7 @@ resource "truefoundry_system_secret_store" "bad" {
   ]
 }
 `,
-			want: regexp.MustCompile(`lowercase alphanumeric`),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
 		},
 	}
 	for _, tc := range cases {

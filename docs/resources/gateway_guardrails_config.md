@@ -61,7 +61,7 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
 
 ### Required
 
-- `name` (String) Name of the guardrails config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the guardrails config.
 - `rules` (Attributes Set) Guardrails rules. Every matching rule's guardrails run on a request; order is not significant. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only

@@ -137,6 +137,39 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
 - The control plane verifies integration credentials at apply time for some types (Azure blob storage connection strings, Vault token/AppRole) but not others (Slack webhooks/bots) — `dryRun: true` applies exercise this too.
 - `name` and `provider_type` are `RequiresReplace`; everything else updates in place via re-apply (apply is idempotent, `CREATE` vs `UPDATE`).
 
+### Manifest name rules
+
+The control plane validates manifest names with a JSON-schema pattern of the
+shape `^[a-z][a-z0-9\-]{1,N}[a-z0-9]$` — a **lowercase letter first**, a letter
+or digit last — and only `N` differs per manifest family. Neither the TypeScript
+nor the Python SDK carries any length or pattern constraint, so the SDK is no
+authority here; the bounds below were read off a live control plane on
+2026-09-08, one `dryRun: true` apply per family (binary search on the name
+length, then the pattern from the error message). When a manifest fails its own
+union branch the control plane reports the *last* branch's error
+(`ProviderAccounts : must have required property 'aws_account_id'`) — that
+message means "no branch matched", not that the name is fine.
+
+| manifest family | name rule |
+| --- | --- |
+| `provider-account/{openai,azure-openai,azure-foundry,aws-bedrock,custom-endpoint,truefoundry}` | 3-32 |
+| `provider-account/{azure,hashicorp,slack,guardrail-config-group}`, `virtual-account` | 3-36 |
+| `provider-account/virtual-model` | 3-64 |
+| integration names (nested in an account) | 1-64 |
+| `mcp-server/{remote,openapi,virtual}` | 3-73 |
+| `truefoundry-agent`, `remote-agent/self-hosted` | 3-32, no consecutive hyphens |
+| `role` | 3-35 |
+| `secret-group` | 5-50, no consecutive hyphens |
+| `ml-repo` | 3-100, **upper case allowed** |
+| `tenant-budget-config`, `team-budget-config` | 2-62, upper case allowed |
+| every `gateway-*-config` / `gateway-global-settings` | **not validated at all** (1 and 300 characters both accepted) |
+
+`provider_account` covers types with two different bounds, so its schema
+validator allows the wider 64 and `ValidateConfig` enforces 32 for every type
+but `virtual-model`. `agent-skill` and `chat_prompt` names are unprobed: their
+apply endpoints ignore `dryRun` and persist, so they must never be probed with a
+valid manifest.
+
 ### Adding a provider type (e.g. gemini)
 
 Fetch the account/model manifest shapes from the TypeScript SDK serialization files, then touch: `providerTypeValues` + schema attributes + `ValidateConfig` + `manifestFromModel`/`integrationToModel` (resource), wire structs (`client`), `validateManifest` (`mockcp`), an acceptance-test lifecycle + validation cases, and an example.

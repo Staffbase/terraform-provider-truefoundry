@@ -155,7 +155,7 @@ resource "truefoundry_prompt" "bad" {
   messages = [{ role = "system", content = "x" }]
 }
 `,
-			want: regexp.MustCompile("must be lowercase alphanumeric with hyphens"),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
 		},
 		{
 			// The control plane's referential check: prompts may only live in

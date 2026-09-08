@@ -63,7 +63,7 @@ resource "truefoundry_secret_group" "system" {
 ### Required
 
 - `integration_fqn` (String) FQN of the secret store integration backing the group, e.g. of a `truefoundry_system_secret_store`: my-tenant:truefoundry:system-secret-store:secret-store:system-secret-store. A group cannot be moved between stores — the control plane rejects the change rather than silently migrating the secrets.
-- `name` (String) Name of the secret group (lowercase alphanumeric and hyphens), unique within the tenant. **Changing it replaces the group, which deletes every secret stored in it** — the secrets are created out of band and Terraform cannot recreate them.
+- `name` (String) Name of the secret group (5-50 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens, no consecutive hyphens), unique within the tenant. **Changing it replaces the group, which deletes every secret stored in it** — the secrets are created out of band and Terraform cannot recreate them.
 
 ### Optional
 

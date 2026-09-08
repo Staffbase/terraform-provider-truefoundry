@@ -88,10 +88,9 @@ func (r *gatewayDataAccessConfigResource) Schema(_ context.Context, _ resource.S
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the data access config (3-32 characters, lowercase alphanumeric and hyphens).",
+				Description: "Name of the data access config.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 32),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"rules": schema.SetNestedAttribute{

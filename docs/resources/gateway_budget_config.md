@@ -64,7 +64,7 @@ resource "truefoundry_gateway_budget_config" "budget" {
 
 ### Required
 
-- `name` (String) Name of the budget config (3-32 characters, lowercase alphanumeric and hyphens).
+- `name` (String) Name of the budget config.
 - `rules` (Attributes Set) Budget rules. A request that matches several rules is limited by each of them; order is not significant. (see [below for nested schema](#nestedatt--rules))
 
 ### Read-Only

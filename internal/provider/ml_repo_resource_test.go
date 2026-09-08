@@ -115,14 +115,16 @@ func TestAccMlRepo_validation(t *testing.T) {
 		want   *regexp.Regexp
 	}{
 		{
-			name: "uppercase name",
+			// Upper case is legal in ML repo names (and only there), an
+			// underscore is not.
+			name: "invalid name",
 			config: `
 resource "truefoundry_ml_repo" "bad" {
-  name                    = "Spike-Bad"
+  name                    = "Spike_Bad"
   storage_integration_fqn = "mock-tenant:azure:none:blob-storage:none"
 }
 `,
-			want: regexp.MustCompile("must be lowercase alphanumeric with hyphens"),
+			want: regexp.MustCompile("must start with a letter"),
 		},
 		{
 			// The control plane's referential check: the storage integration

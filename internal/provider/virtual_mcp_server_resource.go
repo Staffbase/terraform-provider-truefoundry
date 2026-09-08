@@ -77,10 +77,10 @@ func (r *virtualMcpServerResource) Schema(_ context.Context, _ resource.SchemaRe
 			},
 			"name": schema.StringAttribute{
 				Required:    true,
-				Description: "Name of the virtual MCP server (3-73 characters, lowercase alphanumeric and hyphens). Changing it replaces the server.",
+				Description: "Name of the virtual MCP server (3-73 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the server.",
 				Validators: []validator.String{
-					stringvalidator.LengthBetween(3, 73),
-					stringvalidator.RegexMatches(nameRegexp, "must be lowercase alphanumeric with hyphens"),
+					stringvalidator.LengthBetween(minNameLen, maxMcpServerNameLen),
+					stringvalidator.RegexMatches(nameRegexp, "must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens"),
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},

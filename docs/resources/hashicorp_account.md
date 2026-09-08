@@ -39,7 +39,7 @@ resource "truefoundry_hashicorp_account" "secrets" {
 
 ### Required
 
-- `name` (String) Name of the HashiCorp account (3-32 characters, lowercase alphanumeric and hyphens). Changing it replaces the account.
+- `name` (String) Name of the HashiCorp account (3-36 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the account.
 - `vaults` (Attributes List) Vault KV secret stores accessible through this account. (see [below for nested schema](#nestedatt--vaults))
 
 ### Read-Only

@@ -276,7 +276,19 @@ resource "truefoundry_role" "bad" {
   resource_type = "tenant"
   permissions   = ["user:ListUsers"]
 }`,
-			want: regexp.MustCompile(`must be lowercase alphanumeric with hyphens`),
+			want: regexp.MustCompile(`must start with a lowercase letter`),
+		},
+		{
+			// The control plane caps role names at 35 characters.
+			name: "name too long",
+			config: `
+resource "truefoundry_role" "bad" {
+  name          = "abbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc"
+  display_name  = "Ops"
+  resource_type = "tenant"
+  permissions   = ["user:ListUsers"]
+}`,
+			want: regexp.MustCompile(`string length must be between 3 and 35`),
 		},
 	}
 

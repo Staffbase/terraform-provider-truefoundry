@@ -155,7 +155,7 @@ func agentNameAttribute(kind string) schema.StringAttribute {
 		Description: fmt.Sprintf("Name of the %s (3-32 characters, lowercase alphanumeric and single hyphens). "+
 			"Changing it replaces the agent.", kind),
 		Validators: []validator.String{
-			stringvalidator.LengthBetween(3, 32),
+			stringvalidator.LengthBetween(minNameLen, maxAgentNameLen),
 			stringvalidator.RegexMatches(agentNameRegexp, "must be lowercase alphanumeric with single hyphens"),
 		},
 		PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},

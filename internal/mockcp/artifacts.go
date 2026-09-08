@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -108,6 +109,11 @@ func (s *Server) DeletePromptByName(name string) {
 	delete(s.prompts, name)
 }
 
+// mlRepoNameRe is the ML repo name pattern of the real control plane,
+// "^[a-zA-Z][a-zA-Z0-9\\-]{1,98}[a-zA-Z0-9]$" (3-100 characters). ML repo
+// names are the one manifest family that accepts upper case.
+var mlRepoNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{1,98}[a-zA-Z0-9]$`)
+
 // handleApplyMlRepo implements PUT /api/svc/v1/ml-repos: create an ML repo
 // or update an existing one in place (same name keeps the same ID).
 func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
@@ -122,6 +128,10 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	if name == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: MlRepoManifest : must have required property 'name'"})
+		return
+	}
+	if !mlRepoNameRe.MatchString(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: MLRepoManifest /name: must match pattern %q", mlRepoNameRe.String())})
 		return
 	}
 	if _, ok := req["collaborators"].([]any); !ok {

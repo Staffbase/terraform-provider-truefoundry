@@ -82,7 +82,7 @@ resource "truefoundry_openapi_mcp_server" "petstore" {
 ### Required
 
 - `description` (String) Human-readable description shown to gateway users and AI agents.
-- `name` (String) Name of the MCP server (3-73 characters, lowercase alphanumeric and hyphens). Changing it replaces the server.
+- `name` (String) Name of the MCP server (3-73 characters; must start with a lowercase letter, end with a letter or digit, and contain only lowercase letters, digits and hyphens). Changing it replaces the server.
 - `openapi_spec_source` (Attributes) Where the OpenAPI spec comes from. `type` selects the kind: `remote` and `upload` take a `url`, `inline` takes the spec itself in `openapi_spec`. (see [below for nested schema](#nestedatt--openapi_spec_source))
 - `url` (String) Base URL of the API described by the OpenAPI spec, e.g. https://api.example.com.
 
