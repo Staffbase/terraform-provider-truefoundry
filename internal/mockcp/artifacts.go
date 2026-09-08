@@ -114,6 +114,14 @@ func (s *Server) DeletePromptByName(name string) {
 // names are the one manifest family that accepts upper case.
 var mlRepoNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9-]{1,98}[a-zA-Z0-9]$`)
 
+// artifactNameRe mirrors the provider's own agent-skill/prompt name
+// validator (internal/provider/names.go's nameRegexp), not a pattern read
+// off the real control plane: those two families' apply endpoints ignore
+// dryRun and persist, so they must never be probed with a valid manifest
+// (see AGENTS.md "Manifest name rules"). Enforcing it here at least keeps
+// the mock in sync with the provider's own client-side rule.
+var artifactNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]+[a-z0-9]$`)
+
 // handleApplyMlRepo implements PUT /api/svc/v1/ml-repos: create an ML repo
 // or update an existing one in place (same name keeps the same ID).
 func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
@@ -358,6 +366,10 @@ func requireArtifactNames(w http.ResponseWriter, manifest map[string]any) (name,
 	mlRepoName, _ = manifest["ml_repo"].(string)
 	if name == "" || mlRepoName == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ML Repo name and artifact name both are required to apply manifest"})
+		return "", "", false
+	}
+	if !artifactNameRe.MatchString(name) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: name must match pattern %q", artifactNameRe.String())})
 		return "", "", false
 	}
 	return name, mlRepoName, true
