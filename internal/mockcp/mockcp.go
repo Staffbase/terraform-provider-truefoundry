@@ -37,6 +37,7 @@ type Server struct {
 	skills       map[string]*artifactSeries // keyed by manifest name
 	prompts      map[string]*artifactSeries // keyed by manifest name
 	nextID       int
+	tokenReads   int // count of GET .../virtual-accounts/{id}/token requests
 }
 
 type account struct {
@@ -270,12 +271,21 @@ func (s *Server) handleDeleteVirtualAccount(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleGetVirtualAccountToken(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.tokenReads++
 	va := s.findVirtualAccount(r.PathValue("id"))
 	if va == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "virtual account not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": va.token})
+}
+
+// VirtualAccountTokenReadCount returns how many times the token endpoint has
+// been requested, for asserting that reads only fetch it when needed.
+func (s *Server) VirtualAccountTokenReadCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenReads
 }
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {

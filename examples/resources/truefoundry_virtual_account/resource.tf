@@ -14,6 +14,11 @@ resource "truefoundry_virtual_account" "ci" {
   token_type      = "jwt"
   tags            = { env = "production" }
 
+  # Only set this for accounts whose token rotation must be caught by
+  # Terraform: it doubles the request count of every plan that reads this
+  # account (defaults to false).
+  refresh_token = false
+
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.
   secret_store_config = {

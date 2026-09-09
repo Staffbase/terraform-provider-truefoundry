@@ -29,6 +29,11 @@ resource "truefoundry_virtual_account" "ci" {
   token_type      = "jwt"
   tags            = { env = "production" }
 
+  # Only set this for accounts whose token rotation must be caught by
+  # Terraform: it doubles the request count of every plan that reads this
+  # account (defaults to false).
+  refresh_token = false
+
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.
   secret_store_config = {
@@ -54,6 +59,7 @@ output "ci_bot_token" {
 ### Optional
 
 - `expiration_date` (String) Expiration date of the account in yyyy-mm-dd format. Unset means no expiration.
+- `refresh_token` (Boolean) Refetch the API token on every read, so out-of-band token rotations are picked up. Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the request count of a plan that reads many virtual accounts. Set `true` for accounts whose token rotation must be detected by Terraform.
 - `secret_store_config` (Attributes) Sync the account token into a secret store, e.g. Vault. (see [below for nested schema](#nestedatt--secret_store_config))
 - `tags` (Map of String) Key-value pairs to categorize this virtual account.
 - `token_type` (String) Format of the issued token: `jwt` or `opaque`. Unset uses the platform default.
@@ -61,7 +67,7 @@ output "ci_bot_token" {
 ### Read-Only
 
 - `id` (String) Control plane ID of the virtual account.
-- `token` (String, Sensitive) Current API token of the virtual account. Refreshed on read, so out-of-band token rotations are picked up.
+- `token` (String, Sensitive) Current API token of the virtual account. Only refreshed on read when `refresh_token` is `true`.
 
 <a id="nestedatt--permissions"></a>
 ### Nested Schema for `permissions`

@@ -29,6 +29,13 @@ const (
 	applyPath        = "/api/svc/v1/apply"
 	deletePath       = "/api/svc/v1/delete"
 	integrationsPath = "/api/svc/v1/provider-integrations"
+
+	// maxResponseBody caps how much of a response body we buffer. Set well
+	// above the largest observed payload (the tenant-wide integrations list,
+	// ~0.17 MiB per page as of 2026-09) so it only trips on a runaway
+	// response, and high enough it should never need raising again as that
+	// list grows with every model added across the tenant.
+	maxResponseBody = 64 << 20 // 64 MiB
 )
 
 // Client talks to a TrueFoundry control plane.
@@ -491,9 +498,12 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	}
 	defer resp.Body.Close()
 
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody+1))
 	if err != nil {
 		return fmt.Errorf("reading response of %s %s: %w", method, path, err)
+	}
+	if len(raw) > maxResponseBody {
+		return fmt.Errorf("response of %s %s exceeds the %d MiB limit; truncating it would silently corrupt the JSON", method, path, maxResponseBody>>20)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return &APIError{StatusCode: resp.StatusCode, Body: string(raw)}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -121,6 +122,41 @@ func TestListModelIntegrations(t *testing.T) {
 	}
 	if len(one) != 1 || one[0].FQN != all[0].FQN {
 		t.Errorf("fqn filter returned %+v, want exactly %q", one, all[0].FQN)
+	}
+}
+
+// TestOversizedResponseBodyFailsClearly asserts that a response past the
+// client's read cap surfaces an explicit error instead of a truncated body
+// silently corrupting json.Unmarshal.
+func TestOversizedResponseBodyFailsClearly(t *testing.T) {
+	oversized := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		// One MiB above the cap: enough to prove the limit isn't silently
+		// truncating, without writing gigabytes in a unit test.
+		const chunk = 1 << 20
+		buf := make([]byte, chunk)
+		for i := range buf {
+			buf[i] = ' '
+		}
+		w.Write([]byte(`[`))
+		for range 65 {
+			w.Write(buf)
+		}
+		w.Write([]byte(`]`))
+	}))
+	t.Cleanup(oversized.Close)
+
+	c, err := client.New(oversized.URL, testAPIKey, "test")
+	if err != nil {
+		t.Fatalf("client.New: %v", err)
+	}
+	_, err = c.ListModelIntegrations(context.Background(), "")
+	if err == nil {
+		t.Fatal("ListModelIntegrations: expected error for oversized response, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds") || !strings.Contains(err.Error(), "MiB") {
+		t.Errorf("error = %q, want a clear size-limit message", err.Error())
 	}
 }
 

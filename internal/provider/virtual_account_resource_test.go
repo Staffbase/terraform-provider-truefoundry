@@ -110,6 +110,79 @@ resource "truefoundry_virtual_account" "ci" {
 	})
 }
 
+// TestAccVirtualAccount_refreshTokenGatesTokenFetch asserts that the token
+// endpoint is only hit on read when refresh_token is true (default false),
+// so a plan over many virtual accounts does not double its request count.
+func TestAccVirtualAccount_refreshTokenGatesTokenFetch(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+
+	defaultConfig := providerConfig(host) + `
+resource "truefoundry_virtual_account" "ci" {
+  name = "spike-token-gate-bot"
+  permissions = [
+    {
+      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
+      resource_type = "provider-account"
+      role_id       = "provider-account-access"
+    },
+  ]
+}
+`
+	refreshingConfig := providerConfig(host) + `
+resource "truefoundry_virtual_account" "ci" {
+  name = "spike-token-gate-bot"
+  permissions = [
+    {
+      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
+      resource_type = "provider-account"
+      role_id       = "provider-account-access"
+    },
+  ]
+  refresh_token = true
+}
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				// Create issues one token read as a fallback path only if the
+				// apply response omits the token; the mock always includes
+				// it, so no token-endpoint request is expected yet.
+				Config: defaultConfig,
+				Check:  resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "refresh_token", "false"),
+			},
+			{
+				// A second plan/apply with no config change still refreshes
+				// via Read. refresh_token defaults to false, so the token
+				// endpoint must stay untouched.
+				Config: defaultConfig,
+				Check: func(*terraform.State) error {
+					if n := mock.VirtualAccountTokenReadCount(); n != 0 {
+						return fmt.Errorf("token endpoint read %d times with refresh_token=false, want 0", n)
+					}
+					return nil
+				},
+			},
+			{
+				// Flipping refresh_token to true (an in-place update) does
+				// not itself call the token endpoint.
+				Config: refreshingConfig,
+			},
+			{
+				// The next refresh now runs with refresh_token=true and must
+				// fetch the token again.
+				Config: refreshingConfig,
+				Check: func(*terraform.State) error {
+					if n := mock.VirtualAccountTokenReadCount(); n < 1 {
+						return fmt.Errorf("token endpoint read %d times with refresh_token=true, want >= 1", n)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
 func TestAccVirtualAccount_recreatedAfterExternalDeletion(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 	config := providerConfig(host) + `

@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -45,6 +46,7 @@ type virtualAccountModel struct {
 	TokenType         types.String            `tfsdk:"token_type"`
 	Tags              map[string]types.String `tfsdk:"tags"`
 	SecretStoreConfig *secretStoreConfigModel `tfsdk:"secret_store_config"`
+	RefreshToken      types.Bool              `tfsdk:"refresh_token"`
 	Token             types.String            `tfsdk:"token"`
 }
 
@@ -138,10 +140,19 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 					},
 				},
 			},
+			"refresh_token": schema.BoolAttribute{
+				Optional: true,
+				Computed: true,
+				Default:  booldefault.StaticBool(false),
+				Description: "Refetch the API token on every read, so out-of-band token rotations are picked up. " +
+					"Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the " +
+					"request count of a plan that reads many virtual accounts. Set `true` for accounts whose token " +
+					"rotation must be detected by Terraform.",
+			},
 			"token": schema.StringAttribute{
 				Computed:    true,
 				Sensitive:   true,
-				Description: "Current API token of the virtual account. Refreshed on read, so out-of-band token rotations are picked up.",
+				Description: "Current API token of the virtual account. Only refreshed on read when `refresh_token` is `true`.",
 			},
 		},
 	}
@@ -204,12 +215,23 @@ func (r *virtualAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 	virtualAccountManifestToModel(account, &state)
 
-	token, err := r.client.GetVirtualAccountToken(ctx, state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Reading TrueFoundry virtual account token failed", err.Error())
-		return
+	// refresh_token is local-only (the control plane manifest carries no
+	// such field): on a fresh import it starts null, so fall back to its
+	// schema default rather than leaving it unset in state.
+	if state.RefreshToken.IsNull() {
+		state.RefreshToken = types.BoolValue(false)
 	}
-	state.Token = types.StringValue(token)
+
+	// A never-populated token (fresh import) must be fetched regardless of
+	// refresh_token; an already-known token is only refetched when asked.
+	if state.RefreshToken.ValueBool() || state.Token.IsNull() {
+		token, err := r.client.GetVirtualAccountToken(ctx, state.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Reading TrueFoundry virtual account token failed", err.Error())
+			return
+		}
+		state.Token = types.StringValue(token)
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
