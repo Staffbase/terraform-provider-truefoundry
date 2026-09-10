@@ -5,52 +5,45 @@
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 
-version-resolver:
-  major:
-    labels:
-      - "breaking"
-      - "major"
-  minor:
-    labels:
-      - "feature"
-      - "enhancement"
-      - "minor"
-  patch:
-    labels:
-      - "fix"
-      - "bug"
-      - "chore"
-      - "dependencies"
-      - "documentation"
-      - "patch"
-  default: patch
-
 categories:
   # First match wins, so `breaking` outranks the rest.
   - title: "💥 Breaking Changes"
-    labels:
-      - "breaking"
-      - "major"
+    semver-increment: "major"
+    when:
+      labels:
+        - "breaking"
+        - "major"
   - title: "🚀 Features"
-    labels:
-      - "feature"
-      - "enhancement"
-      - "minor"
+    semver-increment: "minor"
+    when:
+      labels:
+        - "feature"
+        - "enhancement"
+        - "minor"
   - title: "🐛 Bug Fixes"
-    labels:
-      - "fix"
-      - "bug"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "fix"
+        - "bug"
   - title: "📖 Documentation"
-    labels:
-      - "documentation"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "documentation"
   - title: "🧰 Maintenance"
-    labels:
-      - "chore"
-      - "dependencies"
-      - "patch"
-
-exclude-labels:
-  - "skip-changelog"
+    semver-increment: "patch"
+    when:
+      labels:
+        - "chore"
+        - "dependencies"
+        - "patch"
+  - type: "pre-exclude"
+    when:
+      label: "skip-changelog"
+  # Fallback bump for a PR matching none of the above (no rendered section).
+  - type: "version-resolver"
+    semver-increment: "patch"
 
 template: |
   ## Changes
