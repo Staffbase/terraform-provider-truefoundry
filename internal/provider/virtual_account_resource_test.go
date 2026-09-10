@@ -175,6 +175,7 @@ resource "truefoundry_virtual_account" "ci" {
   }
 }
 `
+	var afterCreate int
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6Factories,
 		Steps: []resource.TestStep{
@@ -183,16 +184,23 @@ resource "truefoundry_virtual_account" "ci" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.interval_days", "90"),
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.grace_period_days", "15"),
+					func(*terraform.State) error {
+						afterCreate = mock.VirtualAccountTokenReadCount()
+						return nil
+					},
 				),
 			},
 			{
 				// A second plan/apply with no config change still refreshes
 				// via Read. auto_rotate must force the token endpoint to be
-				// hit even though nothing else changed.
+				// hit even though nothing else changed — assert the counter
+				// increases from its post-create value, not just that it's
+				// nonzero (Create can itself fall back to the token endpoint
+				// when the apply response omits the token).
 				Config: config,
 				Check: func(*terraform.State) error {
-					if n := mock.VirtualAccountTokenReadCount(); n < 1 {
-						return fmt.Errorf("token endpoint read %d times with auto_rotate set, want >= 1", n)
+					if n := mock.VirtualAccountTokenReadCount(); n <= afterCreate {
+						return fmt.Errorf("token endpoint read count %d did not increase from %d with auto_rotate set", n, afterCreate)
 					}
 					return nil
 				},
