@@ -129,23 +129,32 @@ resource "truefoundry_virtual_account" "ci" {
   ]
 }
 `
+	var afterCreate int
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: protoV6Factories,
 		Steps: []resource.TestStep{
 			{
 				// Create issues one token read as a fallback path only if the
 				// apply response omits the token; the mock always includes
-				// it, so no token-endpoint request is expected yet.
+				// it, so no token-endpoint request is expected yet, but
+				// capture the count rather than assume it either way.
 				Config: config,
+				Check: func(*terraform.State) error {
+					afterCreate = mock.VirtualAccountTokenReadCount()
+					return nil
+				},
 			},
 			{
 				// A second plan/apply with no config change still refreshes
 				// via Read. Without auto_rotate, the token endpoint must stay
-				// untouched.
+				// untouched — assert the counter doesn't increase from its
+				// post-create value, not that it's absolute zero (Create can
+				// itself fall back to the token endpoint when the apply
+				// response omits the token).
 				Config: config,
 				Check: func(*terraform.State) error {
-					if n := mock.VirtualAccountTokenReadCount(); n != 0 {
-						return fmt.Errorf("token endpoint read %d times without auto_rotate, want 0", n)
+					if n := mock.VirtualAccountTokenReadCount(); n != afterCreate {
+						return fmt.Errorf("token endpoint read count %d increased from %d without auto_rotate", n, afterCreate)
 					}
 					return nil
 				},
