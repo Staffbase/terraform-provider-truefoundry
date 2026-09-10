@@ -14,13 +14,9 @@ resource "truefoundry_virtual_account" "ci" {
   token_type      = "jwt"
   tags            = { env = "production" }
 
-  # Only set this for accounts whose token rotation must be caught by
-  # Terraform: it doubles the request count of every plan that reads this
-  # account (defaults to false). Has no effect when auto_rotate is set below.
-  refresh_token = false
-
-  # Optional: turn on control-plane-side periodic token rotation. When set,
-  # every read refetches the token regardless of refresh_token.
+  # Optional: turn on control-plane-side periodic token rotation. Setting
+  # this makes every read refetch the token, so a plan over many virtual
+  # accounts doesn't double its request count unless it's actually needed.
   # auto_rotate = {
   #   interval_days     = 90
   #   grace_period_days = 15

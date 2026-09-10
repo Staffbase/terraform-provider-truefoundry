@@ -133,18 +133,21 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   Inline skill sources must start with YAML frontmatter whose `name` matches
   the manifest name. Prompts model only plain-string messages, variables, and
   model_configuration — the advanced chat_prompt blocks are dropped on apply.
-- **Virtual account tokens are opt-in refresh, not always-on**: `Read` used to
+- **Virtual account tokens are not refreshed by default**: `Read` used to
   call `GetVirtualAccountToken` unconditionally, doubling the request count of
-  any plan over many virtual accounts (DEVS-1533, 2026-09-10). `refresh_token`
-  (default `false`) gates it now; a never-populated `token` (fresh import)
-  still forces a fetch regardless. `auto_rotate` (control-plane-side periodic
-  rotation) overrides `refresh_token` and always forces a fetch, since a
-  rotating token's whole point is for Terraform to detect the change. The
-  `auto_rotate` manifest shape (`auto_rotate_interval`/`grace_period`, minimum
-  30/1 days) is taken from the published API docs/SDK, **not verified against
-  a real control plane** — Staffbase doesn't use the feature, so there was no
-  live account to `dryRun` apply against. Verify before trusting the exact
-  field names/bounds if this ever needs to work for real.
+  any plan over many virtual accounts (DEVS-1533, 2026-09-10). Now the token
+  is set once on create and left as-is on refresh, unless `auto_rotate` is
+  set (control-plane-side periodic rotation always forces a refetch, since
+  a rotating token's whole point is for Terraform to detect the change) or
+  the token has never been populated yet (a fresh import). Considered a
+  manual per-resource opt-in flag as a middle ground but dropped it:
+  `auto_rotate` is the only real source of out-of-band rotation, so a
+  second toggle on top would be redundant. The `auto_rotate` manifest shape
+  (`auto_rotate_interval`/`grace_period`, minimum 30/1 days) is taken from
+  the published API docs/SDK, **not verified against a real control
+  plane** — Staffbase doesn't use the feature, so there was no live account
+  to `dryRun` apply against. Verify before trusting the exact field
+  names/bounds if this ever needs to work for real.
 - **One `truefoundry_provider_account` resource, five provider types** (`openai`, `azure-openai`, `azure-foundry`, `aws-bedrock`, `virtual-model`) with different required-field combinations — notably azure-foundry has *per-model* auth/endpoints and no account-level auth. Account types whose integrations are not models get their own resource (`custom_endpoint_account`, `azure_account`, `slack_account`, `hashicorp_account`, `system_secret_store`) and are listed with their own `?type=` filter (`blob-storage`, `notification-channel`, `secret-store` — the latter shared by hashicorp and truefoundry accounts). In all resources the validation rules live in exactly two places: `ValidateConfig` in the resource (plan-time, attribute-level errors) and `validateManifest` in `mockcp` (mock server-side). Keep them in sync.
 - The control plane verifies integration credentials at apply time for some types (Azure blob storage connection strings, Vault token/AppRole) but not others (Slack webhooks/bots) — `dryRun: true` applies exercise this too.
 - `name` and `provider_type` are `RequiresReplace`; everything else updates in place via re-apply (apply is idempotent, `CREATE` vs `UPDATE`).

@@ -110,13 +110,14 @@ resource "truefoundry_virtual_account" "ci" {
 	})
 }
 
-// TestAccVirtualAccount_refreshTokenGatesTokenFetch asserts that the token
-// endpoint is only hit on read when refresh_token is true (default false),
-// so a plan over many virtual accounts does not double its request count.
-func TestAccVirtualAccount_refreshTokenGatesTokenFetch(t *testing.T) {
+// TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate asserts that the
+// token endpoint is only hit on read when auto_rotate is set (or the token
+// is unknown, e.g. import), so a plan over many virtual accounts does not
+// double its request count.
+func TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 
-	defaultConfig := providerConfig(host) + `
+	config := providerConfig(host) + `
 resource "truefoundry_virtual_account" "ci" {
   name = "spike-token-gate-bot"
   permissions = [
@@ -126,19 +127,6 @@ resource "truefoundry_virtual_account" "ci" {
       role_id       = "provider-account-access"
     },
   ]
-}
-`
-	refreshingConfig := providerConfig(host) + `
-resource "truefoundry_virtual_account" "ci" {
-  name = "spike-token-gate-bot"
-  permissions = [
-    {
-      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
-      resource_type = "provider-account"
-      role_id       = "provider-account-access"
-    },
-  ]
-  refresh_token = true
 }
 `
 	resource.Test(t, resource.TestCase{
@@ -148,33 +136,16 @@ resource "truefoundry_virtual_account" "ci" {
 				// Create issues one token read as a fallback path only if the
 				// apply response omits the token; the mock always includes
 				// it, so no token-endpoint request is expected yet.
-				Config: defaultConfig,
-				Check:  resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "refresh_token", "false"),
+				Config: config,
 			},
 			{
 				// A second plan/apply with no config change still refreshes
-				// via Read. refresh_token defaults to false, so the token
-				// endpoint must stay untouched.
-				Config: defaultConfig,
+				// via Read. Without auto_rotate, the token endpoint must stay
+				// untouched.
+				Config: config,
 				Check: func(*terraform.State) error {
 					if n := mock.VirtualAccountTokenReadCount(); n != 0 {
-						return fmt.Errorf("token endpoint read %d times with refresh_token=false, want 0", n)
-					}
-					return nil
-				},
-			},
-			{
-				// Flipping refresh_token to true (an in-place update) does
-				// not itself call the token endpoint.
-				Config: refreshingConfig,
-			},
-			{
-				// The next refresh now runs with refresh_token=true and must
-				// fetch the token again.
-				Config: refreshingConfig,
-				Check: func(*terraform.State) error {
-					if n := mock.VirtualAccountTokenReadCount(); n < 1 {
-						return fmt.Errorf("token endpoint read %d times with refresh_token=true, want >= 1", n)
+						return fmt.Errorf("token endpoint read %d times without auto_rotate, want 0", n)
 					}
 					return nil
 				},
@@ -184,7 +155,7 @@ resource "truefoundry_virtual_account" "ci" {
 }
 
 // TestAccVirtualAccount_autoRotateForcesTokenRefresh asserts that auto_rotate
-// always refetches the token on read, ignoring refresh_token's default false.
+// always refetches the token on read.
 func TestAccVirtualAccount_autoRotateForcesTokenRefresh(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 
@@ -212,13 +183,12 @@ resource "truefoundry_virtual_account" "ci" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.interval_days", "90"),
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.grace_period_days", "15"),
-					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "refresh_token", "false"),
 				),
 			},
 			{
 				// A second plan/apply with no config change still refreshes
-				// via Read. Even though refresh_token defaults to false,
-				// auto_rotate must force the token endpoint to be hit.
+				// via Read. auto_rotate must force the token endpoint to be
+				// hit even though nothing else changed.
 				Config: config,
 				Check: func(*terraform.State) error {
 					if n := mock.VirtualAccountTokenReadCount(); n < 1 {

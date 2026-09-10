@@ -3,12 +3,12 @@
 page_title: "truefoundry_virtual_account Resource - TrueFoundry"
 subcategory: ""
 description: |-
-  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. Existing accounts can be imported by their ID.
+  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. The token is only refreshed on read when auto_rotate is set, so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 ---
 
 # truefoundry_virtual_account (Resource)
 
-Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. Existing accounts can be imported by their ID.
+Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. The token is only refreshed on read when `auto_rotate` is set, so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 
 ## Example Usage
 
@@ -29,13 +29,9 @@ resource "truefoundry_virtual_account" "ci" {
   token_type      = "jwt"
   tags            = { env = "production" }
 
-  # Only set this for accounts whose token rotation must be caught by
-  # Terraform: it doubles the request count of every plan that reads this
-  # account (defaults to false). Has no effect when auto_rotate is set below.
-  refresh_token = false
-
-  # Optional: turn on control-plane-side periodic token rotation. When set,
-  # every read refetches the token regardless of refresh_token.
+  # Optional: turn on control-plane-side periodic token rotation. Setting
+  # this makes every read refetch the token, so a plan over many virtual
+  # accounts doesn't double its request count unless it's actually needed.
   # auto_rotate = {
   #   interval_days     = 90
   #   grace_period_days = 15
@@ -65,9 +61,8 @@ output "ci_bot_token" {
 
 ### Optional
 
-- `auto_rotate` (Attributes) Turn on control-plane-side periodic token rotation. Presence of this block is what activates rotation; there is no separate enabled flag. When set, `refresh_token` is ignored and every read refetches the token, since the whole point of rotation is for Terraform to pick up the new value. Unverified against a real control plane — Staffbase does not use this feature yet. (see [below for nested schema](#nestedatt--auto_rotate))
+- `auto_rotate` (Attributes) Turn on control-plane-side periodic token rotation. Presence of this block is what activates rotation; there is no separate enabled flag. Setting it makes every read refetch the token, since the whole point of rotation is for Terraform to pick up the new value — leave it unset (the common case) and the token is set once on create and left as-is on refresh, so a plan over many virtual accounts doesn't double its request count. Unverified against a real control plane — Staffbase does not use this feature yet. (see [below for nested schema](#nestedatt--auto_rotate))
 - `expiration_date` (String) Expiration date of the account in yyyy-mm-dd format. Unset means no expiration.
-- `refresh_token` (Boolean) Refetch the API token on every read, so out-of-band token rotations are picked up. Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the request count of a plan that reads many virtual accounts. Set `true` for accounts whose token rotation must be detected by Terraform. Has no effect when `auto_rotate` is set — that always refetches the token.
 - `secret_store_config` (Attributes) Sync the account token into a secret store, e.g. Vault. (see [below for nested schema](#nestedatt--secret_store_config))
 - `tags` (Map of String) Key-value pairs to categorize this virtual account.
 - `token_type` (String) Format of the issued token: `jwt` or `opaque`. Unset uses the platform default.
@@ -75,7 +70,7 @@ output "ci_bot_token" {
 ### Read-Only
 
 - `id` (String) Control plane ID of the virtual account.
-- `token` (String, Sensitive) Current API token of the virtual account. Only refreshed on read when `refresh_token` is `true`.
+- `token` (String, Sensitive) Current API token of the virtual account. Set once on create; only refreshed on read when `auto_rotate` is set (or the token isn't in state yet, e.g. right after import).
 
 <a id="nestedatt--permissions"></a>
 ### Nested Schema for `permissions`

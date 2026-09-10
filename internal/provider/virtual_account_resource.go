@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -48,7 +47,6 @@ type virtualAccountModel struct {
 	Tags              map[string]types.String `tfsdk:"tags"`
 	SecretStoreConfig *secretStoreConfigModel `tfsdk:"secret_store_config"`
 	AutoRotate        *autoRotateModel        `tfsdk:"auto_rotate"`
-	RefreshToken      types.Bool              `tfsdk:"refresh_token"`
 	Token             types.String            `tfsdk:"token"`
 }
 
@@ -76,7 +74,8 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 	resp.Schema = schema.Schema{
 		Description: "Manages a TrueFoundry virtual account (service account) and its permissions. " +
 			"The account's API token is exposed as the sensitive `token` attribute; alternatively, " +
-			"`secret_store_config` syncs it into a secret store. " +
+			"`secret_store_config` syncs it into a secret store. The token is only refreshed on read " +
+			"when `auto_rotate` is set, so a plan over many virtual accounts doesn't double its request count. " +
 			"Existing accounts can be imported by their ID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -150,9 +149,11 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"auto_rotate": schema.SingleNestedAttribute{
 				Optional: true,
 				Description: "Turn on control-plane-side periodic token rotation. Presence of this block is what " +
-					"activates rotation; there is no separate enabled flag. When set, `refresh_token` is ignored and " +
-					"every read refetches the token, since the whole point of rotation is for Terraform to pick up " +
-					"the new value. Unverified against a real control plane — Staffbase does not use this feature yet.",
+					"activates rotation; there is no separate enabled flag. Setting it makes every read refetch the " +
+					"token, since the whole point of rotation is for Terraform to pick up the new value — leave it " +
+					"unset (the common case) and the token is set once on create and left as-is on refresh, so a " +
+					"plan over many virtual accounts doesn't double its request count. Unverified against a real " +
+					"control plane — Staffbase does not use this feature yet.",
 				Attributes: map[string]schema.Attribute{
 					"interval_days": schema.Int64Attribute{
 						Required:    true,
@@ -166,20 +167,11 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 					},
 				},
 			},
-			"refresh_token": schema.BoolAttribute{
-				Optional: true,
-				Computed: true,
-				Default:  booldefault.StaticBool(false),
-				Description: "Refetch the API token on every read, so out-of-band token rotations are picked up. " +
-					"Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the " +
-					"request count of a plan that reads many virtual accounts. Set `true` for accounts whose token " +
-					"rotation must be detected by Terraform. Has no effect when `auto_rotate` is set — that always " +
-					"refetches the token.",
-			},
 			"token": schema.StringAttribute{
-				Computed:    true,
-				Sensitive:   true,
-				Description: "Current API token of the virtual account. Only refreshed on read when `refresh_token` is `true`.",
+				Computed:  true,
+				Sensitive: true,
+				Description: "Current API token of the virtual account. Set once on create; only refreshed on " +
+					"read when `auto_rotate` is set (or the token isn't in state yet, e.g. right after import).",
 			},
 		},
 	}
@@ -242,18 +234,11 @@ func (r *virtualAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 	virtualAccountManifestToModel(account, &state)
 
-	// refresh_token is local-only (the control plane manifest carries no
-	// such field): on a fresh import it starts null, so fall back to its
-	// schema default rather than leaving it unset in state.
-	if state.RefreshToken.IsNull() {
-		state.RefreshToken = types.BoolValue(false)
-	}
-
-	// A never-populated token (fresh import) must be fetched regardless of
-	// refresh_token; an already-known token is only refetched when asked, or
-	// unconditionally when auto_rotate is on (the control plane may have
-	// rotated it since the last read, and refresh_token can't override that).
-	if state.RefreshToken.ValueBool() || state.Token.IsNull() || state.AutoRotate != nil {
+	// The token is set once on create and otherwise left as-is: an
+	// already-known token is only refetched when auto_rotate is on (the
+	// control plane may have rotated it since the last read), or when it's
+	// never been populated yet (a fresh import).
+	if state.AutoRotate != nil || state.Token.IsNull() {
 		token, err := r.client.GetVirtualAccountToken(ctx, state.ID.ValueString())
 		if err != nil {
 			resp.Diagnostics.AddError("Reading TrueFoundry virtual account token failed", err.Error())
