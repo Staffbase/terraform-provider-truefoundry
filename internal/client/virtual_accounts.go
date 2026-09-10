@@ -21,9 +21,20 @@ type SecretStoreConfig struct {
 	SecretPath     string `json:"secret_path"`
 }
 
-// VirtualAccountManifest is a "virtual-account" manifest. Auto-rotation,
-// notification targets, ownership, and identity provider mappings are not
-// modeled.
+// AutoRotate turns on periodic control-plane-side token rotation for a
+// virtual account. Its presence in the manifest is what activates rotation;
+// there is no separate enabled flag. Shape per the published
+// truefoundry-typescript-sdk / API docs (2026-09-10) — unverified against a
+// real control plane: Staffbase does not use this feature yet, so there is
+// no live account to dryRun apply against. Verify against a real control
+// plane before relying on the exact field names/bounds here.
+type AutoRotate struct {
+	IntervalDays int64 `json:"auto_rotate_interval"` // days between rotations, minimum 30
+	GracePeriod  int64 `json:"grace_period"`         // days the pre-rotation token stays valid, minimum 1
+}
+
+// VirtualAccountManifest is a "virtual-account" manifest. Notification
+// targets, ownership, and identity provider mappings are not modeled.
 type VirtualAccountManifest struct {
 	Name              string             `json:"name"`
 	Type              string             `json:"type"` // always "virtual-account"
@@ -32,6 +43,7 @@ type VirtualAccountManifest struct {
 	TokenType         string             `json:"token_type,omitempty"` // jwt or opaque
 	Tags              map[string]string  `json:"tags,omitempty"`
 	SecretStoreConfig *SecretStoreConfig `json:"secret_store_config,omitempty"`
+	AutoRotate        *AutoRotate        `json:"auto_rotate,omitempty"`
 }
 
 // VirtualAccount is a virtual account as returned by the API.

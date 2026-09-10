@@ -16,8 +16,15 @@ resource "truefoundry_virtual_account" "ci" {
 
   # Only set this for accounts whose token rotation must be caught by
   # Terraform: it doubles the request count of every plan that reads this
-  # account (defaults to false).
+  # account (defaults to false). Has no effect when auto_rotate is set below.
   refresh_token = false
+
+  # Optional: turn on control-plane-side periodic token rotation. When set,
+  # every read refetches the token regardless of refresh_token.
+  # auto_rotate = {
+  #   interval_days     = 90
+  #   grace_period_days = 15
+  # }
 
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.

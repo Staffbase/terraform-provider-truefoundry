@@ -31,8 +31,15 @@ resource "truefoundry_virtual_account" "ci" {
 
   # Only set this for accounts whose token rotation must be caught by
   # Terraform: it doubles the request count of every plan that reads this
-  # account (defaults to false).
+  # account (defaults to false). Has no effect when auto_rotate is set below.
   refresh_token = false
+
+  # Optional: turn on control-plane-side periodic token rotation. When set,
+  # every read refetches the token regardless of refresh_token.
+  # auto_rotate = {
+  #   interval_days     = 90
+  #   grace_period_days = 15
+  # }
 
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.
@@ -58,8 +65,9 @@ output "ci_bot_token" {
 
 ### Optional
 
+- `auto_rotate` (Attributes) Turn on control-plane-side periodic token rotation. Presence of this block is what activates rotation; there is no separate enabled flag. When set, `refresh_token` is ignored and every read refetches the token, since the whole point of rotation is for Terraform to pick up the new value. Unverified against a real control plane — Staffbase does not use this feature yet. (see [below for nested schema](#nestedatt--auto_rotate))
 - `expiration_date` (String) Expiration date of the account in yyyy-mm-dd format. Unset means no expiration.
-- `refresh_token` (Boolean) Refetch the API token on every read, so out-of-band token rotations are picked up. Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the request count of a plan that reads many virtual accounts. Set `true` for accounts whose token rotation must be detected by Terraform.
+- `refresh_token` (Boolean) Refetch the API token on every read, so out-of-band token rotations are picked up. Defaults to `false`: the token is set once (on create) and left as-is on refresh, halving the request count of a plan that reads many virtual accounts. Set `true` for accounts whose token rotation must be detected by Terraform. Has no effect when `auto_rotate` is set — that always refetches the token.
 - `secret_store_config` (Attributes) Sync the account token into a secret store, e.g. Vault. (see [below for nested schema](#nestedatt--secret_store_config))
 - `tags` (Map of String) Key-value pairs to categorize this virtual account.
 - `token_type` (String) Format of the issued token: `jwt` or `opaque`. Unset uses the platform default.
@@ -77,6 +85,15 @@ Required:
 - `resource_fqn` (String) FQN of the resource the role applies to, e.g. a provider account FQN.
 - `resource_type` (String) Type of the resource, e.g. provider-account, cluster, workspace.
 - `role_id` (String) Role to assign, e.g. provider-account-access.
+
+
+<a id="nestedatt--auto_rotate"></a>
+### Nested Schema for `auto_rotate`
+
+Required:
+
+- `grace_period_days` (Number) Days the pre-rotation token stays valid after a rotation. Minimum 1.
+- `interval_days` (Number) Days between rotations. Minimum 30.
 
 
 <a id="nestedatt--secret_store_config"></a>

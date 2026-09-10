@@ -183,6 +183,54 @@ resource "truefoundry_virtual_account" "ci" {
 	})
 }
 
+// TestAccVirtualAccount_autoRotateForcesTokenRefresh asserts that auto_rotate
+// always refetches the token on read, ignoring refresh_token's default false.
+func TestAccVirtualAccount_autoRotateForcesTokenRefresh(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+
+	config := providerConfig(host) + `
+resource "truefoundry_virtual_account" "ci" {
+  name = "spike-auto-rotate-bot"
+  permissions = [
+    {
+      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
+      resource_type = "provider-account"
+      role_id       = "provider-account-access"
+    },
+  ]
+  auto_rotate = {
+    interval_days     = 90
+    grace_period_days = 15
+  }
+}
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.interval_days", "90"),
+					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.grace_period_days", "15"),
+					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "refresh_token", "false"),
+				),
+			},
+			{
+				// A second plan/apply with no config change still refreshes
+				// via Read. Even though refresh_token defaults to false,
+				// auto_rotate must force the token endpoint to be hit.
+				Config: config,
+				Check: func(*terraform.State) error {
+					if n := mock.VirtualAccountTokenReadCount(); n < 1 {
+						return fmt.Errorf("token endpoint read %d times with auto_rotate set, want >= 1", n)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
 func TestAccVirtualAccount_recreatedAfterExternalDeletion(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 	config := providerConfig(host) + `
@@ -295,6 +343,22 @@ resource "truefoundry_virtual_account" "bad" {
 }
 `,
 			want: regexp.MustCompile(`yyyy-mm-dd`),
+		},
+		{
+			name: "auto_rotate interval too short",
+			config: `
+resource "truefoundry_virtual_account" "bad" {
+  name = "spike-bad-bot"
+  permissions = [
+    { resource_fqn = "a", resource_type = "provider-account", role_id = "r" },
+  ]
+  auto_rotate = {
+    interval_days     = 10
+    grace_period_days = 5
+  }
+}
+`,
+			want: regexp.MustCompile(`at least 30`),
 		},
 	}
 	for _, tc := range cases {
