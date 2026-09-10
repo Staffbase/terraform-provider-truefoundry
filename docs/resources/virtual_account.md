@@ -3,12 +3,12 @@
 page_title: "truefoundry_virtual_account Resource - TrueFoundry"
 subcategory: ""
 description: |-
-  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. Existing accounts can be imported by their ID.
+  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. The token is only refreshed on read when auto_rotate is set or the token isn't in state yet (e.g. right after import), so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 ---
 
 # truefoundry_virtual_account (Resource)
 
-Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. Existing accounts can be imported by their ID.
+Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. The token is only refreshed on read when `auto_rotate` is set or the token isn't in state yet (e.g. right after import), so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 
 ## Example Usage
 
@@ -28,6 +28,14 @@ resource "truefoundry_virtual_account" "ci" {
   expiration_date = "2027-01-31"
   token_type      = "jwt"
   tags            = { env = "production" }
+
+  # Optional: turn on control-plane-side periodic token rotation. Setting
+  # this makes every read refetch the token, so a plan over many virtual
+  # accounts doesn't double its request count unless it's actually needed.
+  # auto_rotate = {
+  #   interval_days     = 90
+  #   grace_period_days = 15
+  # }
 
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.
@@ -53,6 +61,7 @@ output "ci_bot_token" {
 
 ### Optional
 
+- `auto_rotate` (Attributes) Turn on control-plane-side periodic token rotation. Presence of this block is what activates rotation; there is no separate enabled flag. Setting it makes every read refetch the token, since the whole point of rotation is for Terraform to pick up the new value — leave it unset (the common case) and the token is set once on create and left as-is on refresh, so a plan over many virtual accounts doesn't double its request count. Unverified against a real control plane — Staffbase does not use this feature yet. (see [below for nested schema](#nestedatt--auto_rotate))
 - `expiration_date` (String) Expiration date of the account in yyyy-mm-dd format. Unset means no expiration.
 - `secret_store_config` (Attributes) Sync the account token into a secret store, e.g. Vault. (see [below for nested schema](#nestedatt--secret_store_config))
 - `tags` (Map of String) Key-value pairs to categorize this virtual account.
@@ -61,7 +70,7 @@ output "ci_bot_token" {
 ### Read-Only
 
 - `id` (String) Control plane ID of the virtual account.
-- `token` (String, Sensitive) Current API token of the virtual account. Refreshed on read, so out-of-band token rotations are picked up.
+- `token` (String, Sensitive) Current API token of the virtual account. Set once on create; only refreshed on read when `auto_rotate` is set (or the token isn't in state yet, e.g. right after import).
 
 <a id="nestedatt--permissions"></a>
 ### Nested Schema for `permissions`
@@ -71,6 +80,15 @@ Required:
 - `resource_fqn` (String) FQN of the resource the role applies to, e.g. a provider account FQN.
 - `resource_type` (String) Type of the resource, e.g. provider-account, cluster, workspace.
 - `role_id` (String) Role to assign, e.g. provider-account-access.
+
+
+<a id="nestedatt--auto_rotate"></a>
+### Nested Schema for `auto_rotate`
+
+Required:
+
+- `grace_period_days` (Number) Days the pre-rotation token stays valid after a rotation. Minimum 1.
+- `interval_days` (Number) Days between rotations. Minimum 30.
 
 
 <a id="nestedatt--secret_store_config"></a>

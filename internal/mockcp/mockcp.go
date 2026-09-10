@@ -37,6 +37,7 @@ type Server struct {
 	skills       map[string]*artifactSeries // keyed by manifest name
 	prompts      map[string]*artifactSeries // keyed by manifest name
 	nextID       int
+	tokenReads   int // count of GET .../virtual-accounts/{id}/token requests
 }
 
 type account struct {
@@ -212,6 +213,18 @@ func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "token_type must be jwt or opaque"})
 		return
 	}
+	if ar, ok := req.Manifest["auto_rotate"].(map[string]any); ok {
+		interval, _ := ar["auto_rotate_interval"].(float64)
+		grace, _ := ar["grace_period"].(float64)
+		if interval < 30 {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "auto_rotate.auto_rotate_interval must be at least 30"})
+			return
+		}
+		if grace < 1 {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "auto_rotate.grace_period must be at least 1"})
+			return
+		}
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -270,12 +283,21 @@ func (s *Server) handleDeleteVirtualAccount(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleGetVirtualAccountToken(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.tokenReads++
 	va := s.findVirtualAccount(r.PathValue("id"))
 	if va == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "virtual account not found"})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"token": va.token})
+}
+
+// VirtualAccountTokenReadCount returns how many times the token endpoint has
+// been requested, for asserting that reads only fetch it when needed.
+func (s *Server) VirtualAccountTokenReadCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tokenReads
 }
 
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {

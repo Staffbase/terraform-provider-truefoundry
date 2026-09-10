@@ -110,6 +110,114 @@ resource "truefoundry_virtual_account" "ci" {
 	})
 }
 
+// TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate asserts that the
+// token endpoint is only hit on read when auto_rotate is set (or the token
+// is null in state, e.g. import), so a plan over many virtual accounts does
+// not double its request count.
+func TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+
+	config := providerConfig(host) + `
+resource "truefoundry_virtual_account" "ci" {
+  name = "spike-token-gate-bot"
+  permissions = [
+    {
+      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
+      resource_type = "provider-account"
+      role_id       = "provider-account-access"
+    },
+  ]
+}
+`
+	var afterCreate int
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				// Create issues one token read as a fallback path only if the
+				// apply response omits the token; the mock always includes
+				// it, so no token-endpoint request is expected yet, but
+				// capture the count rather than assume it either way.
+				Config: config,
+				Check: func(*terraform.State) error {
+					afterCreate = mock.VirtualAccountTokenReadCount()
+					return nil
+				},
+			},
+			{
+				// A second plan/apply with no config change still refreshes
+				// via Read. Without auto_rotate, the token endpoint must stay
+				// untouched — assert the counter doesn't increase from its
+				// post-create value, not that it's absolute zero (Create can
+				// itself fall back to the token endpoint when the apply
+				// response omits the token).
+				Config: config,
+				Check: func(*terraform.State) error {
+					if n := mock.VirtualAccountTokenReadCount(); n != afterCreate {
+						return fmt.Errorf("token endpoint read count %d increased from %d without auto_rotate", n, afterCreate)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+// TestAccVirtualAccount_autoRotateForcesTokenRefresh asserts that auto_rotate
+// always refetches the token on read.
+func TestAccVirtualAccount_autoRotateForcesTokenRefresh(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+
+	config := providerConfig(host) + `
+resource "truefoundry_virtual_account" "ci" {
+  name = "spike-auto-rotate-bot"
+  permissions = [
+    {
+      resource_fqn  = "mock-tenant:azure-openai:spike-azure"
+      resource_type = "provider-account"
+      role_id       = "provider-account-access"
+    },
+  ]
+  auto_rotate = {
+    interval_days     = 90
+    grace_period_days = 15
+  }
+}
+`
+	var afterCreate int
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.interval_days", "90"),
+					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "auto_rotate.grace_period_days", "15"),
+					func(*terraform.State) error {
+						afterCreate = mock.VirtualAccountTokenReadCount()
+						return nil
+					},
+				),
+			},
+			{
+				// A second plan/apply with no config change still refreshes
+				// via Read. auto_rotate must force the token endpoint to be
+				// hit even though nothing else changed — assert the counter
+				// increases from its post-create value, not just that it's
+				// nonzero (Create can itself fall back to the token endpoint
+				// when the apply response omits the token).
+				Config: config,
+				Check: func(*terraform.State) error {
+					if n := mock.VirtualAccountTokenReadCount(); n <= afterCreate {
+						return fmt.Errorf("token endpoint read count %d did not increase from %d with auto_rotate set", n, afterCreate)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
 func TestAccVirtualAccount_recreatedAfterExternalDeletion(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 	config := providerConfig(host) + `
@@ -222,6 +330,22 @@ resource "truefoundry_virtual_account" "bad" {
 }
 `,
 			want: regexp.MustCompile(`yyyy-mm-dd`),
+		},
+		{
+			name: "auto_rotate interval too short",
+			config: `
+resource "truefoundry_virtual_account" "bad" {
+  name = "spike-bad-bot"
+  permissions = [
+    { resource_fqn = "a", resource_type = "provider-account", role_id = "r" },
+  ]
+  auto_rotate = {
+    interval_days     = 10
+    grace_period_days = 5
+  }
+}
+`,
+			want: regexp.MustCompile(`at least 30`),
 		},
 	}
 	for _, tc := range cases {

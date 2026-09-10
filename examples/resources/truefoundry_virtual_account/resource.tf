@@ -14,6 +14,14 @@ resource "truefoundry_virtual_account" "ci" {
   token_type      = "jwt"
   tags            = { env = "production" }
 
+  # Optional: turn on control-plane-side periodic token rotation. Setting
+  # this makes every read refetch the token, so a plan over many virtual
+  # accounts doesn't double its request count unless it's actually needed.
+  # auto_rotate = {
+  #   interval_days     = 90
+  #   grace_period_days = 15
+  # }
+
   # Optional: sync the token into a secret store instead of consuming
   # the sensitive `token` attribute from state.
   secret_store_config = {

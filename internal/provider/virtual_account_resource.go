@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -45,6 +46,7 @@ type virtualAccountModel struct {
 	TokenType         types.String            `tfsdk:"token_type"`
 	Tags              map[string]types.String `tfsdk:"tags"`
 	SecretStoreConfig *secretStoreConfigModel `tfsdk:"secret_store_config"`
+	AutoRotate        *autoRotateModel        `tfsdk:"auto_rotate"`
 	Token             types.String            `tfsdk:"token"`
 }
 
@@ -59,6 +61,11 @@ type secretStoreConfigModel struct {
 	SecretPath     types.String `tfsdk:"secret_path"`
 }
 
+type autoRotateModel struct {
+	IntervalDays types.Int64 `tfsdk:"interval_days"`
+	GracePeriod  types.Int64 `tfsdk:"grace_period_days"`
+}
+
 func (r *virtualAccountResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_virtual_account"
 }
@@ -67,7 +74,9 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 	resp.Schema = schema.Schema{
 		Description: "Manages a TrueFoundry virtual account (service account) and its permissions. " +
 			"The account's API token is exposed as the sensitive `token` attribute; alternatively, " +
-			"`secret_store_config` syncs it into a secret store. " +
+			"`secret_store_config` syncs it into a secret store. The token is only refreshed on read " +
+			"when `auto_rotate` is set or the token isn't in state yet (e.g. right after import), so a " +
+			"plan over many virtual accounts doesn't double its request count. " +
 			"Existing accounts can be imported by their ID.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -138,10 +147,32 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 					},
 				},
 			},
+			"auto_rotate": schema.SingleNestedAttribute{
+				Optional: true,
+				Description: "Turn on control-plane-side periodic token rotation. Presence of this block is what " +
+					"activates rotation; there is no separate enabled flag. Setting it makes every read refetch the " +
+					"token, since the whole point of rotation is for Terraform to pick up the new value — leave it " +
+					"unset (the common case) and the token is set once on create and left as-is on refresh, so a " +
+					"plan over many virtual accounts doesn't double its request count. Unverified against a real " +
+					"control plane — Staffbase does not use this feature yet.",
+				Attributes: map[string]schema.Attribute{
+					"interval_days": schema.Int64Attribute{
+						Required:    true,
+						Description: "Days between rotations. Minimum 30.",
+						Validators:  []validator.Int64{int64validator.AtLeast(30)},
+					},
+					"grace_period_days": schema.Int64Attribute{
+						Required:    true,
+						Description: "Days the pre-rotation token stays valid after a rotation. Minimum 1.",
+						Validators:  []validator.Int64{int64validator.AtLeast(1)},
+					},
+				},
+			},
 			"token": schema.StringAttribute{
-				Computed:    true,
-				Sensitive:   true,
-				Description: "Current API token of the virtual account. Refreshed on read, so out-of-band token rotations are picked up.",
+				Computed:  true,
+				Sensitive: true,
+				Description: "Current API token of the virtual account. Set once on create; only refreshed on " +
+					"read when `auto_rotate` is set (or the token isn't in state yet, e.g. right after import).",
 			},
 		},
 	}
@@ -204,12 +235,18 @@ func (r *virtualAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 	virtualAccountManifestToModel(account, &state)
 
-	token, err := r.client.GetVirtualAccountToken(ctx, state.ID.ValueString())
-	if err != nil {
-		resp.Diagnostics.AddError("Reading TrueFoundry virtual account token failed", err.Error())
-		return
+	// The token is set once on create and otherwise left as-is: an
+	// already-known token is only refetched when auto_rotate is on (the
+	// control plane may have rotated it since the last read), or when it's
+	// never been populated yet (a fresh import).
+	if state.AutoRotate != nil || state.Token.IsNull() {
+		token, err := r.client.GetVirtualAccountToken(ctx, state.ID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Reading TrueFoundry virtual account token failed", err.Error())
+			return
+		}
+		state.Token = types.StringValue(token)
 	}
-	state.Token = types.StringValue(token)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -282,6 +319,12 @@ func virtualAccountManifestFromModel(m *virtualAccountModel) client.VirtualAccou
 			SecretPath:     m.SecretStoreConfig.SecretPath.ValueString(),
 		}
 	}
+	if m.AutoRotate != nil {
+		manifest.AutoRotate = &client.AutoRotate{
+			IntervalDays: m.AutoRotate.IntervalDays.ValueInt64(),
+			GracePeriod:  m.AutoRotate.GracePeriod.ValueInt64(),
+		}
+	}
 	return manifest
 }
 
@@ -311,6 +354,13 @@ func virtualAccountManifestToModel(account *client.VirtualAccount, state *virtua
 		state.SecretStoreConfig = &secretStoreConfigModel{
 			IntegrationFQN: types.StringValue(manifest.SecretStoreConfig.IntegrationFQN),
 			SecretPath:     types.StringValue(manifest.SecretStoreConfig.SecretPath),
+		}
+	}
+	state.AutoRotate = nil
+	if manifest.AutoRotate != nil {
+		state.AutoRotate = &autoRotateModel{
+			IntervalDays: types.Int64Value(manifest.AutoRotate.IntervalDays),
+			GracePeriod:  types.Int64Value(manifest.AutoRotate.GracePeriod),
 		}
 	}
 }
