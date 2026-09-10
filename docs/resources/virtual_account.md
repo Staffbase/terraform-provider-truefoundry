@@ -3,12 +3,12 @@
 page_title: "truefoundry_virtual_account Resource - TrueFoundry"
 subcategory: ""
 description: |-
-  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. The token is only refreshed on read when auto_rotate is set, so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
+  Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive token attribute; alternatively, secret_store_config syncs it into a secret store. The token is only refreshed on read when auto_rotate is set or the token isn't in state yet (e.g. right after import), so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 ---
 
 # truefoundry_virtual_account (Resource)
 
-Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. The token is only refreshed on read when `auto_rotate` is set, so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
+Manages a TrueFoundry virtual account (service account) and its permissions. The account's API token is exposed as the sensitive `token` attribute; alternatively, `secret_store_config` syncs it into a secret store. The token is only refreshed on read when `auto_rotate` is set or the token isn't in state yet (e.g. right after import), so a plan over many virtual accounts doesn't double its request count. Existing accounts can be imported by their ID.
 
 ## Example Usage
 

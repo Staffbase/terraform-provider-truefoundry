@@ -112,8 +112,8 @@ resource "truefoundry_virtual_account" "ci" {
 
 // TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate asserts that the
 // token endpoint is only hit on read when auto_rotate is set (or the token
-// is unknown, e.g. import), so a plan over many virtual accounts does not
-// double its request count.
+// is null in state, e.g. import), so a plan over many virtual accounts does
+// not double its request count.
 func TestAccVirtualAccount_tokenNotRefetchedWithoutAutoRotate(t *testing.T) {
 	mock, host := startMockControlPlane(t)
 
