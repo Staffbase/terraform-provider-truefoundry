@@ -102,9 +102,10 @@ func (r *slackAccountResource) Schema(_ context.Context, _ resource.SchemaReques
 							Validators:  []validator.String{stringvalidator.LengthBetween(1, 64)},
 						},
 						"webhook_url": schema.StringAttribute{
-							Required:    true,
-							Sensitive:   true,
-							Description: "Slack incoming webhook URL. Accepts TrueFoundry secret references (recommended); the control plane returns it as stored, so drift is detected.",
+							Required:  true,
+							Sensitive: true,
+							Description: "Slack incoming webhook URL. Accepts TrueFoundry secret references (recommended). " +
+								"The control plane masks this value on read (returns \"[redacted]\"), so the provider preserves the last known value instead of detecting drift on it.",
 						},
 						"authorized_subjects": authorizedSubjects,
 					},
@@ -231,7 +232,14 @@ func (r *slackAccountResource) Read(ctx context.Context, req resource.ReadReques
 	for _, w := range state.Webhooks {
 		if manifest, ok := remote[w.Name.ValueString()]; ok {
 			delete(remote, w.Name.ValueString())
-			appendChannel(manifest)
+			webhook := slackWebhookToModel(manifest)
+			// The control plane masks webhook_url on read (returns the
+			// literal string "[redacted]" instead of the stored value), so
+			// preserve the prior state's value instead of overwriting it -
+			// same tradeoff as truefoundry_agent_skill's Source, at the cost
+			// of undetectable drift on this field.
+			webhook.WebhookURL = w.WebhookURL
+			webhooks = append(webhooks, webhook)
 		}
 	}
 	for _, b := range state.Bots {

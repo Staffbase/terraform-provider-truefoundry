@@ -153,6 +153,18 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   plane** — Staffbase doesn't use the feature, so there was no live account
   to `dryRun` apply against. Verify before trusting the exact field
   names/bounds if this ever needs to work for real.
+- **`truefoundry_slack_account.webhooks[*].webhook_url` is masked on read**:
+  `GET /api/svc/v1/provider-integrations?type=notification-channel` returns
+  the literal string `"[redacted]"` in `auth_data.webhook_url`, not the
+  stored value — verified against the dev control plane (DEVS-1432-adjacent,
+  2026-09-15) after it caused a perpetual `~ webhook_url` diff on every plan.
+  `Read` now preserves the prior state's `webhook_url` instead of overwriting
+  it from the manifest (same tradeoff as `truefoundry_agent_skill`'s
+  `source`); a fresh import therefore reads back as `[redacted]` and the
+  acceptance test ignores that attribute (`ImportStateVerifyIgnore`).
+  `mockcp` reproduces the masking (`maskSlackWebhookURL`) so this stays
+  regression-tested. `bot_token` was not probed and may have the same
+  behavior — unverified.
 - **One `truefoundry_provider_account` resource, five provider types** (`openai`, `azure-openai`, `azure-foundry`, `aws-bedrock`, `virtual-model`) with different required-field combinations — notably azure-foundry has *per-model* auth/endpoints and no account-level auth. Account types whose integrations are not models get their own resource (`custom_endpoint_account`, `azure_account`, `slack_account`, `hashicorp_account`, `system_secret_store`) and are listed with their own `?type=` filter (`blob-storage`, `notification-channel`, `secret-store` — the latter shared by hashicorp and truefoundry accounts). In all resources the validation rules live in exactly two places: `ValidateConfig` in the resource (plan-time, attribute-level errors) and `validateManifest` in `mockcp` (mock server-side). Keep them in sync.
 - The control plane verifies integration credentials at apply time for some types (Azure blob storage connection strings, Vault token/AppRole) but not others (Slack webhooks/bots) — `dryRun: true` applies exercise this too.
 - `name` and `provider_type` are `RequiresReplace`; everything else updates in place via re-apply (apply is idempotent, `CREATE` vs `UPDATE`).

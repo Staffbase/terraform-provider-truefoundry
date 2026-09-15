@@ -71,7 +71,7 @@ Optional:
 Required:
 
 - `name` (String) Name identifying this notification channel.
-- `webhook_url` (String, Sensitive) Slack incoming webhook URL. Accepts TrueFoundry secret references (recommended); the control plane returns it as stored, so drift is detected.
+- `webhook_url` (String, Sensitive) Slack incoming webhook URL. Accepts TrueFoundry secret references (recommended). The control plane masks this value on read (returns "[redacted]"), so the provider preserves the last known value instead of detecting drift on it.
 
 Optional:
 

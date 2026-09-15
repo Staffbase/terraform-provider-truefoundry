@@ -112,6 +112,10 @@ func TestAccSlackAccount_import(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateId:     mockcp.Tenant + ":slack:spike-slack-webhooks",
+				// The control plane masks webhook_url on read; a fresh
+				// import has no prior state to preserve, so it reads back
+				// as "[redacted]" (see slackAccountResource.Read).
+				ImportStateVerifyIgnore: []string{"webhooks.0.webhook_url"},
 			},
 		},
 	})
