@@ -85,6 +85,8 @@ func (s *Server) applyBudgetV2(w http.ResponseWriter, typ, name string, manifest
 
 // handleListBudgets implements GET /api/svc/v1/llm-gateway/budgets. Only the
 // `type` query parameter filters; the real endpoint ignores everything else.
+// The response wraps the array in a {"data": [...]} envelope with no
+// "pagination" key.
 func (s *Server) handleListBudgets(w http.ResponseWriter, r *http.Request) {
 	typeFilter := r.URL.Query().Get("type")
 	s.mu.Lock()
@@ -104,7 +106,7 @@ func (s *Server) handleListBudgets(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i]["name"].(string) < items[j]["name"].(string) })
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, map[string]any{"data": items})
 }
 
 // validateBudgetV2Manifest enforces the v2 budget rule shape, derived from

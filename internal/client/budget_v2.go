@@ -100,14 +100,16 @@ type BudgetV2 struct {
 }
 
 // ListBudgets returns the tenant's v2 budget rules of the given manifest type
-// ("tenant-budget-config" or "team-budget-config").
+// ("tenant-budget-config" or "team-budget-config"). The endpoint wraps the
+// array in a {"data": [...]} envelope (verified against the dev control plane
+// 2026-09-15; no "pagination" key is present, so this does not page).
 func (c *Client) ListBudgets(ctx context.Context, manifestType string) ([]BudgetV2, error) {
-	var out []BudgetV2
+	var out listIntegrationsResponse[BudgetV2]
 	q := url.Values{"type": {manifestType}}
 	if err := c.do(ctx, http.MethodGet, budgetsPath, q, nil, &out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return out.Data, nil
 }
 
 // GetBudget returns the budget rule with the given manifest type and name, or

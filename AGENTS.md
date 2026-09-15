@@ -61,8 +61,12 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   and deleted through the generic manifest endpoints but read via
   `GET /api/svc/v1/llm-gateway/budgets?type=` — `llm-gateway/config/<type>` returns an
   empty 200 for them, and the budgets list endpoint honors only the `type` query
-  parameter (`name` is ignored, so match client-side). Verified against a real control
-  plane 2026-07-28: apply honors `dryRun`, the deployed manifest schema is ahead of the
+  parameter (`name` is ignored, so match client-side). The list response wraps its
+  array in a `{"data": [...]}` envelope with no `pagination` key (changed from a bare
+  array observed on 2026-07-28; re-verified 2026-09-15 after a "cannot unmarshal object
+  into Go value of type []client.BudgetV2" error surfaced on the dev tenant — `ListBudgets`
+  now decodes via the shared `listIntegrationsResponse[T]` envelope type). Verified against
+  a real control plane 2026-07-28: apply honors `dryRun`, the deployed manifest schema is ahead of the
   published SDK (`when.provider_accounts`, `limits.cost_per_lifetime`, and
   `alerts.notify_breaching_user` are accepted), unknown manifest fields pass through
   unvalidated, the rule name pattern is `^[a-zA-Z](?:[a-zA-Z0-9\-]{0,60}[a-zA-Z0-9])$`
@@ -76,7 +80,8 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   rejected with `422 "RoleManifest : must have required property
   'displayName'"`), and roles are listed via `GET /api/svc/v1/role` —
   singular, a bare JSON array with no `{data, pagination}` envelope, and it
-  ignores `?name=`, so `GetRole` matches client-side like `GetBudget`. The
+  ignores `?name=`, so `GetRole` matches client-side (unlike `GetBudget`,
+  whose list endpoint now uses a `{"data": [...]}` envelope — see above). The
   control plane normalizes `resourceType`: a manifest applied with the legacy
   `account` is stored as `tenant`, so the provider accepts only `tenant` and
   `team` (any other scope is rejected outright with `400 "Resource type <x>
