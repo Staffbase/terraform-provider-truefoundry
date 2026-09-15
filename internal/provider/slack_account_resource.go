@@ -230,17 +230,25 @@ func (r *slackAccountResource) Read(ctx context.Context, req resource.ReadReques
 		}
 	}
 	for _, w := range state.Webhooks {
-		if manifest, ok := remote[w.Name.ValueString()]; ok {
-			delete(remote, w.Name.ValueString())
-			webhook := slackWebhookToModel(manifest)
-			// The control plane masks webhook_url on read (returns the
-			// literal string "[redacted]" instead of the stored value), so
-			// preserve the prior state's value instead of overwriting it -
-			// same tradeoff as truefoundry_agent_skill's Source, at the cost
-			// of undetectable drift on this field.
-			webhook.WebhookURL = w.WebhookURL
-			webhooks = append(webhooks, webhook)
+		manifest, ok := remote[w.Name.ValueString()]
+		if !ok {
+			continue
 		}
+		delete(remote, w.Name.ValueString())
+		if manifest.Type == "integration/notification-channel/slack-bot" {
+			// Same name now names a bot channel: don't force it through the
+			// webhook shape (and don't preserve a stale webhook_url for it).
+			appendChannel(manifest)
+			continue
+		}
+		webhook := slackWebhookToModel(manifest)
+		// The control plane masks webhook_url on read (returns the
+		// literal string "[redacted]" instead of the stored value), so
+		// preserve the prior state's value instead of overwriting it -
+		// same tradeoff as truefoundry_agent_skill's Source, at the cost
+		// of undetectable drift on this field.
+		webhook.WebhookURL = w.WebhookURL
+		webhooks = append(webhooks, webhook)
 	}
 	for _, b := range state.Bots {
 		if manifest, ok := remote[b.Name.ValueString()]; ok {
