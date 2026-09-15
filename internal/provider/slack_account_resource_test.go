@@ -48,6 +48,16 @@ func TestAccSlackAccount_lifecycle(t *testing.T) {
 					resource.TestCheckNoResourceAttr("truefoundry_slack_account.notifications", "bots"),
 				),
 			},
+			// No-op refresh: the control plane masks webhook_url on read
+			// ("[redacted]"), so this proves a plain refresh with prior
+			// state preserves the configured value instead of perpetually
+			// showing it as changed.
+			{
+				Config: providerConfig(host) + slackAccountConfig,
+				Check: resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "webhooks.0.webhook_url",
+					"tenant:hashicorp:vault-secrets:secret-store:vault::slack/team-ai-foundation/value"),
+				PlanOnly: true,
+			},
 			// In-place update: add a bot channel with authorized subjects.
 			{
 				Config: providerConfig(host) + `
