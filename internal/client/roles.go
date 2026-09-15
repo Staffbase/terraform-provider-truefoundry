@@ -12,7 +12,9 @@ import (
 //
 // The list endpoint is singular and returns a bare JSON array with no
 // {data, pagination} envelope, and it ignores a ?name= filter, so GetRole
-// matches client-side (like GetBudget).
+// matches client-side. (Budgets used to work the same way, but the real
+// endpoint now wraps its list in a {"data": [...]} envelope — see
+// ListBudgets in budget_v2.go.)
 const rolesPath = "/api/svc/v1/role"
 
 // RoleManifest is a "role" manifest. ⚠️ camelCase field names — see above.
