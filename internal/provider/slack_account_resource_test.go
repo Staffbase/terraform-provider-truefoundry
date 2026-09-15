@@ -1,6 +1,7 @@
 package provider_test
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 
+	"github.com/Staffbase/terraform-provider-truefoundry/internal/client"
 	"github.com/Staffbase/terraform-provider-truefoundry/internal/mockcp"
 )
 
@@ -45,6 +47,16 @@ func TestAccSlackAccount_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "webhooks.#", "1"),
 					resource.TestCheckNoResourceAttr("truefoundry_slack_account.notifications", "bots"),
 				),
+			},
+			// No-op refresh: the control plane masks webhook_url on read
+			// ("[redacted]"), so this proves a plain refresh with prior
+			// state preserves the configured value instead of perpetually
+			// showing it as changed.
+			{
+				Config: providerConfig(host) + slackAccountConfig,
+				Check: resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "webhooks.0.webhook_url",
+					"tenant:hashicorp:vault-secrets:secret-store:vault::slack/team-ai-foundation/value"),
+				PlanOnly: true,
 			},
 			// In-place update: add a bot channel with authorized subjects.
 			{
@@ -100,6 +112,71 @@ resource "truefoundry_slack_account" "notifications" {
 	})
 }
 
+// TestAccSlackAccount_channelTypeChange guards against Read() misrouting a
+// channel that keeps its name but changes type out-of-band (e.g. someone
+// applies a raw manifest against the control plane directly): it must land
+// in bots on refresh, not get force-converted back into a stale webhook
+// with a leftover URL and an empty (silently wrong) plan.
+func TestAccSlackAccount_channelTypeChange(t *testing.T) {
+	_, host := startMockControlPlane(t)
+	c, err := client.New(host, testAPIKey, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config := providerConfig(host) + `
+resource "truefoundry_slack_account" "notifications" {
+  name = "spike-slack-webhooks"
+
+  webhooks = [
+    {
+      name        = "shared-name"
+      webhook_url = "tenant:hashicorp:vault-secrets:secret-store:vault::slack/shared-name/value"
+    },
+  ]
+}
+`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check:  resource.TestCheckResourceAttr("truefoundry_slack_account.notifications", "webhooks.#", "1"),
+			},
+			{
+				PreConfig: func() {
+					// Simulate someone else replacing "shared-name" with a
+					// bot channel directly against the control plane.
+					if _, err := c.Apply(context.Background(), client.SlackAccountManifest{
+						Type: "provider-account/slack",
+						Name: "spike-slack-webhooks",
+						Integrations: []client.SlackNotificationChannel{
+							{
+								Type: "integration/notification-channel/slack-bot",
+								Name: "shared-name",
+								AuthData: &client.APIKeyAuth{
+									Type:     "slack-bot",
+									BotToken: "tenant:hashicorp:vault-secrets:secret-store:vault::slack/shared-name-bot/value",
+								},
+							},
+						},
+					}, false); err != nil {
+						t.Fatal(err)
+					}
+				},
+				// Config still asks for the webhook; the control plane now
+				// only has a bot with that name, so the plan must show a
+				// change. Read() masking the type change would report state
+				// matching config and produce an empty plan instead.
+				Config:             config,
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
 func TestAccSlackAccount_import(t *testing.T) {
 	_, host := startMockControlPlane(t)
 
@@ -112,6 +189,10 @@ func TestAccSlackAccount_import(t *testing.T) {
 				ImportState:       true,
 				ImportStateVerify: true,
 				ImportStateId:     mockcp.Tenant + ":slack:spike-slack-webhooks",
+				// The control plane masks webhook_url on read; a fresh
+				// import has no prior state to preserve, so it reads back
+				// as "[redacted]" (see slackAccountResource.Read).
+				ImportStateVerifyIgnore: []string{"webhooks.0.webhook_url"},
 			},
 		},
 	})

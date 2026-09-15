@@ -9,6 +9,7 @@ package mockcp
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"regexp"
 	"sort"
@@ -1643,12 +1644,20 @@ func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) 
 			if fqnFilter != "" && fqn != fqnFilter {
 				continue
 			}
+			responseManifest := m
+			if integrationKind == "notification-channel" {
+				// The real control plane masks slack-webhook auth_data on
+				// read (returns the literal string "[redacted]" instead of
+				// the stored URL); reproduce that here so acceptance tests
+				// exercise the same masking the provider's Read must handle.
+				responseManifest = maskSlackWebhookURL(m)
+			}
 			items = append(items, map[string]any{
 				"id":                 fmt.Sprintf("%s-int-%d", acc.id, i),
 				"name":               modelName,
 				"fqn":                fqn,
 				"type":               integrationKind,
-				"manifest":           m,
+				"manifest":           responseManifest,
 				"providerAccountFqn": accountFQN(typ, name),
 				"providerAccount":    embeddedAccount,
 				"createdAt":          "2026-07-15T00:00:00Z",
@@ -1672,6 +1681,23 @@ func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) 
 		"data":       page,
 		"pagination": map[string]int{"total": total, "offset": offset, "limit": limit},
 	})
+}
+
+// maskSlackWebhookURL returns a copy of a notification-channel integration
+// manifest with auth_data.webhook_url replaced by "[redacted]", mirroring
+// the real control plane's masking of slack-webhook auth data on read.
+func maskSlackWebhookURL(m map[string]any) map[string]any {
+	auth, _ := m["auth_data"].(map[string]any)
+	if auth == nil || auth["type"] != "slack-webhook" {
+		return m
+	}
+	masked := make(map[string]any, len(m))
+	maps.Copy(masked, m)
+	maskedAuth := make(map[string]any, len(auth))
+	maps.Copy(maskedAuth, auth)
+	maskedAuth["webhook_url"] = "[redacted]"
+	masked["auth_data"] = maskedAuth
+	return masked
 }
 
 // integrationKindFor returns the integration type exposed by a provider
