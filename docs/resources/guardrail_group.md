@@ -18,13 +18,6 @@ Manages a TrueFoundry AI Gateway guardrail config group and its guardrails. Appl
 resource "truefoundry_guardrail_group" "region" {
   name = "guardrails-francecentral"
 
-  collaborators = [
-    {
-      subject = "user:jane@example.com"
-      role_id = "provider-account-manager"
-    },
-  ]
-
   guardrails = [
     {
       type               = "azure-prompt-shield"
@@ -60,7 +53,7 @@ resource "truefoundry_guardrail_group" "region" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this guardrail config group. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this guardrail config group; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 
 ### Read-Only
 
@@ -94,7 +87,7 @@ Optional:
 Required:
 
 - `role_id` (String) Role to assign, e.g. provider-account-manager.
-- `subject` (String) Subject FQN, e.g. user:jane@example.com or team:my-team.
+- `subject` (String) Subject FQN, e.g. user:jane@example.com or team:everyone.
 
 ## Import
 

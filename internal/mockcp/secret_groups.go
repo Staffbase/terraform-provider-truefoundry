@@ -55,6 +55,9 @@ func (s *Server) applySecretGroup(w http.ResponseWriter, typ, name string, manif
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, manifest, "collaborators") {
+		return
+	}
 	if msg, status := s.validateSecretGroupManifest(manifest); msg != "" {
 		writeJSON(w, status, map[string]string{"message": msg})
 		return
@@ -66,6 +69,7 @@ func (s *Server) applySecretGroup(w http.ResponseWriter, typ, name string, manif
 	if ok {
 		action = "UPDATE"
 		existing = g.manifest
+		carryOverLegacyGrant(existing, manifest, "collaborators")
 	} else {
 		g = &secretGroup{id: "sg-" + strconv.Itoa(s.nextID)}
 		s.nextID++
@@ -137,9 +141,6 @@ func (s *Server) validateSecretGroupManifest(manifest map[string]any) (string, i
 	fqn, _ := manifest["integration_fqn"].(string)
 	if fqn == "" {
 		return "SecretGroupManifest : must have required property 'integration_fqn'", http.StatusUnprocessableEntity
-	}
-	if _, ok := manifest["collaborators"].([]any); !ok {
-		return "SecretGroupManifest : must have required property 'collaborators'", http.StatusUnprocessableEntity
 	}
 	if !s.secretStoreIntegrationExists(fqn) {
 		return fmt.Sprintf("Integration with fqn %s not found", fqn), http.StatusNotFound

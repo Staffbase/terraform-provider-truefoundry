@@ -19,10 +19,10 @@ const secretGroupsPath = "/api/svc/v1/secret-groups"
 
 // SecretGroupManifest is a "secret-group" manifest.
 type SecretGroupManifest struct {
-	Type           string         `json:"type"`
-	Name           string         `json:"name"`
-	IntegrationFQN string         `json:"integration_fqn"`
-	Collaborators  []Collaborator `json:"collaborators"`
+	Type           string          `json:"type"`
+	Name           string          `json:"name"`
+	IntegrationFQN string          `json:"integration_fqn"`
+	Collaborators  *[]Collaborator `json:"collaborators,omitempty"`
 }
 
 // SecretGroup is one entry of GET /api/svc/v1/secret-groups.

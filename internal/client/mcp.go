@@ -106,7 +106,7 @@ type McpServerManifest struct {
 	// mcp-server/virtual
 	Servers []McpServerSource `json:"servers,omitempty"`
 
-	Collaborators []Collaborator    `json:"collaborators"`
+	Collaborators *[]Collaborator   `json:"collaborators,omitempty"`
 	Tags          map[string]string `json:"tags,omitempty"`
 }
 

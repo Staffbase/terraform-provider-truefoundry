@@ -14,7 +14,8 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
 - **Agents** — TrueFoundry-hosted agents (model, instructions, skills, MCP
   servers, structured output) and self-hosted remote agents proxied by the
   gateway, plus ML repos with the agent skills and prompts they contain.
-- **Access** — virtual accounts (service accounts) with scoped permissions.
+- **Access** — virtual accounts (service accounts), role bindings granting
+  roles on resources, and custom roles.
 
 Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework).
 
@@ -71,14 +72,19 @@ resource "truefoundry_provider_account" "azure_openai" {
 
 data "truefoundry_models" "all" {}
 
-# Service account with access to the gateway, token synced to Vault.
+# Service account with access to the gateway.
 resource "truefoundry_virtual_account" "ci" {
   name = "ci-bot"
+}
+
+resource "truefoundry_role_binding" "ci" {
+  name     = "va-ci-bot"
+  subjects = [{ type = "virtualaccount", name = truefoundry_virtual_account.ci.name }]
   permissions = [
     {
-      resource_fqn  = truefoundry_provider_account.azure_openai.fqn
       resource_type = "provider-account"
-      role_id       = "provider-account-access"
+      resource_fqn  = truefoundry_provider_account.azure_openai.fqn
+      role          = "provider-account-access"
     },
   ]
 }
@@ -104,8 +110,11 @@ documentation page.
   then the secret itself created out of band, then a `tfy-secret://` reference
   in `api_key`.
 - **Give CI/CD its own virtual account.** Run Terraform with a
-  `truefoundry_virtual_account` token whose permissions cover only the
+  `truefoundry_virtual_account` token whose role bindings cover only the
   resources it manages, rather than a personal access token.
+- **Grant access with role bindings.** Use `truefoundry_role_binding`, not the
+  deprecated `collaborators` and virtual account `permissions` — see
+  [Role bindings](#role-bindings).
 - **Treat gateway configs as singletons.** The `truefoundry_gateway_*_config`
   resources and `truefoundry_gateway_global_settings` are tenant-wide
   singletons: define at most one of each per control plane, and an apply
@@ -131,12 +140,24 @@ The field-by-field mapping, the two behavioral differences that matter when
 porting rules, and a rollout order are in the
 [migration guide](docs/guides/budget-limiting-v2.md).
 
+## Role bindings
+
+Control plane v0.172.0 moved access control out of the resources: the
+`collaborators` of provider accounts, MCP servers, agents, ML repos, and secret
+groups, and the `permissions` of virtual accounts, are deprecated in favour of
+`truefoundry_role_binding`. TrueFoundry rejects applies that still send them
+**after 15 Nov 2026**. Removing the attributes is safe: existing grants stay
+on the control plane.
+
+The field mapping and a rollout order are in the
+[migration guide](docs/guides/role-bindings.md).
+
 ## Importing existing resources
 
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
-are imported by their FQN, agents, ML repos, agent skills, prompts, roles, and
-secret groups by their name, virtual accounts by their ID, and gateway configs
+are imported by their FQN, agents, ML repos, agent skills, prompts, roles, role
+bindings, and secret groups by their name, virtual accounts by their ID, and gateway configs
 (tenant-wide singletons) by fixed string IDs:
 
 ```sh
@@ -156,6 +177,7 @@ terraform import truefoundry_ml_repo.artifacts gateway-artifacts
 terraform import truefoundry_agent_skill.writing ticket-writing
 terraform import truefoundry_prompt.triage ticket-triage
 terraform import truefoundry_role.member member
+terraform import truefoundry_role_binding.ci va-ci-bot
 terraform import truefoundry_virtual_account.ci cmneogofq0002016y0anr48bj
 terraform import truefoundry_gateway_budget_config.budget gateway-budget-config
 terraform import truefoundry_tenant_budget_config.cluster cluster-daily-cap
@@ -217,6 +239,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_agent_skill`](docs/resources/agent_skill.md),
 [`truefoundry_prompt`](docs/resources/prompt.md),
 [`truefoundry_role`](docs/resources/role.md),
+[`truefoundry_role_binding`](docs/resources/role_binding.md),
 [`truefoundry_secret_group`](docs/resources/secret_group.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
@@ -307,7 +330,14 @@ make docs-check  # validate
   place, but **import them rather than creating them**, and note that
   `terraform destroy` only removes them from state — the control plane keeps
   the role with the permissions of the last apply. The control-plane-computed
-  `permissionSetsV2` expansion and role bindings are not modeled.
+  `permissionSetsV2` expansion is not modeled.
+- Role bindings (`truefoundry_role_binding`): implemented from the published
+  API reference, not yet verified against a live control plane. The control
+  plane matches bindings by name, so creating one whose name already exists
+  takes it over. The deprecated `collaborators` and virtual account
+  `permissions` are not tracked once removed from the configuration, and a
+  control plane response without them keeps the last known value, so grants
+  removed entirely outside Terraform are not reported as drift.
 - Secret groups (`truefoundry_secret_group`): the group is managed, the
   secrets in it are not — create and rotate secret values out of band, which
   is what keeps secret material out of the Terraform state. **Destroying or

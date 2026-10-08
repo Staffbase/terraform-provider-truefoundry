@@ -31,9 +31,9 @@ Manual end-to-end demo (`examples/demo/main.tf` + `cmd/mock-control-plane` + `de
 
 Three packages, strictly layered:
 
-- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers), `GET /api/svc/v1/secret-groups?fqn=` (read/list secret groups), `GET /api/svc/v1/role` (read/list roles — singular, bare array), `GET /api/svc/v1/llm-gateway/budgets?type=` (read/list v2 budget rules), `PUT/GET /api/svc/v1/agents` + `DELETE /api/svc/v1/agents/{id}` (versioned agent CRUD), `PUT/GET/DELETE /api/svc/v1/ml-repos` (ML repo CRUD), and the versioned artifact endpoints `PUT /api/svc/v1/agent-skill-versions` + `GET/DELETE /api/svc/v1/agent-skills` and `PUT /api/svc/v1/prompt-versions` + `GET/DELETE /api/svc/v1/prompts`. Also defines the wire types (snake_case JSON manifests).
+- **`internal/client`** — thin HTTP client for the TrueFoundry endpoints used: `PUT /api/svc/v1/apply` (create/update by manifest, returns `action` + `data.id`/`data.fqn`), `POST /api/svc/v1/delete` (delete by manifest), `GET /api/svc/v1/provider-integrations?type=model` (read/list), `GET /api/svc/v1/mcp-servers` (read/list MCP servers), `GET /api/svc/v1/secret-groups?fqn=` (read/list secret groups), `GET /api/svc/v1/role` (read/list roles — singular, bare array), `GET /api/svc/v1/llm-gateway/budgets?type=` (read/list v2 budget rules), `PUT/GET /api/svc/v1/agents` + `DELETE /api/svc/v1/agents/{id}` (versioned agent CRUD), `PUT/GET/DELETE /api/svc/v1/ml-repos` (ML repo CRUD), the versioned artifact endpoints `PUT /api/svc/v1/agent-skill-versions` + `GET/DELETE /api/svc/v1/agent-skills` and `PUT /api/svc/v1/prompt-versions` + `GET/DELETE /api/svc/v1/prompts`, and `PUT/GET /api/svc/v1/role-bindings` + `GET/DELETE /api/svc/v1/role-bindings/{id}` (role binding CRUD). Also defines the wire types (snake_case JSON manifests).
 - **`internal/mockcp`** — in-memory mock of that API surface. It is the executable spec of the API contract: unit tests, acceptance tests, and the `cmd/mock-control-plane` demo binary all share it. If you change a manifest field, update its validation too.
-- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config` (budget limiting v1, deprecated), `truefoundry_tenant_budget_config` + `truefoundry_team_budget_config` (budget limiting v2), `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_openapi_mcp_server` (OpenAPI-based MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_agent` (TrueFoundry-hosted agents), `truefoundry_remote_agent` (self-hosted agents), `truefoundry_ml_repo` (artifact containers), `truefoundry_agent_skill` (versioned SKILL.md artifacts), `truefoundry_prompt` (versioned chat_prompt templates), `truefoundry_virtual_account`, `truefoundry_role` (custom roles), `truefoundry_secret_group` (secret buckets on a secret store); data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
+- **`internal/provider`** — the framework provider: resources `truefoundry_provider_account`, `truefoundry_custom_endpoint_account`, `truefoundry_azure_account` (blob storage), `truefoundry_slack_account` (notification channels), `truefoundry_hashicorp_account` (Vault secret stores), `truefoundry_system_secret_store` (DB-backed secret stores), `truefoundry_gateway_budget_config` (budget limiting v1, deprecated), `truefoundry_tenant_budget_config` + `truefoundry_team_budget_config` (budget limiting v2), `truefoundry_gateway_data_access_config`, `truefoundry_gateway_data_routing_config`, `truefoundry_gateway_guardrails_config`, `truefoundry_gateway_global_settings` (tenant-wide singletons), `truefoundry_guardrail_group`, `truefoundry_mcp_server` (remote MCP servers), `truefoundry_openapi_mcp_server` (OpenAPI-based MCP servers), `truefoundry_virtual_mcp_server` (MCP server aggregations), `truefoundry_agent` (TrueFoundry-hosted agents), `truefoundry_remote_agent` (self-hosted agents), `truefoundry_ml_repo` (artifact containers), `truefoundry_agent_skill` (versioned SKILL.md artifacts), `truefoundry_prompt` (versioned chat_prompt templates), `truefoundry_virtual_account`, `truefoundry_role` (custom roles), `truefoundry_role_binding` (access grants), `truefoundry_secret_group` (secret buckets on a secret store); data source `truefoundry_models`. Provider config `host`/`api_key` falls back to `TFY_HOST`/`TFY_API_KEY`.
 
 The wire format authority is the manifest schemas in
 [truefoundry-typescript-sdk](https://github.com/truefoundry/truefoundry-typescript-sdk) —
@@ -138,6 +138,31 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   Inline skill sources must start with YAML frontmatter whose `name` matches
   the manifest name. Prompts model only plain-string messages, variables, and
   model_configuration — the advanced chat_prompt blocks are dropped on apply.
+- **Access moved into role bindings (control plane v0.172.0, DEVS-1545)**:
+  the per-resource `collaborators` (provider accounts incl. custom endpoints
+  and guardrail groups, MCP servers, agents, ML repos, secret groups) and the
+  virtual account `permissions` are deprecated in favour of standalone
+  `role-binding` manifests, and rejected after **15 Nov 2026**. Until then the
+  control plane distinguishes three wire states, which is why every manifest
+  struct carries `*[]Collaborator` with `omitempty`: field omitted = existing
+  grants untouched, `[]` = cleared, non-empty = replaced (`permissions: []`
+  is rejected). Before this change six resources sent `collaborators: []`
+  whenever the attribute was unset, silently revoking access granted in the
+  UI. The attributes stay as deprecated (no breaking release); `Read` leaves
+  an unset attribute unset (removing it from config must not resurface the
+  untouched grants as drift), keeps the prior value when the response has
+  none (control planes may stop echoing the fields), and adopts the remote
+  grants only on the first read after an import (flagged via the
+  `legacy_grants_import` private state key). `mockcp` carries omitted grants
+  over from the stored manifest and `RetireLegacyGrants()` simulates the
+  post-cut-off rejection; `TestAccLegacyGrants_retired` guards against any
+  resource sending the fields on its own. `truefoundry_role_binding` goes
+  through the dedicated endpoints (camelCase `{data}` envelopes, list is
+  paginated `{data, pagination}` with an exact `?name=` filter — matched
+  client-side anyway), reads by ID, and imports by name. Its shape and the
+  one-subject-or-one-permission rule come from the published API reference
+  (2026-10-08) and are **not verified against a real control plane yet** —
+  `dryRun: true` is documented on its `PUT`, so probe with that.
 - **Virtual account tokens are not refreshed by default**: `Read` used to
   call `GetVirtualAccountToken` unconditionally, doubling the request count of
   any plan over many virtual accounts (DEVS-1533, 2026-09-10). Now the token
@@ -191,6 +216,7 @@ message means "no branch matched", not that the name is fine.
 | `mcp-server/{remote,openapi,virtual}` | 3-73 |
 | `truefoundry-agent`, `remote-agent/self-hosted` | 3-32, no consecutive hyphens |
 | `role` | 3-35 |
+| `role-binding` | 3-66 (from the API reference, not probed) |
 | `secret-group` | 5-50, no consecutive hyphens |
 | `ml-repo` | 3-100, **upper case allowed** |
 | `tenant-budget-config`, `team-budget-config` | 2-62, upper case allowed |

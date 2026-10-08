@@ -14,11 +14,11 @@ const mlReposPath = "/api/svc/v1/ml-repos"
 // prompts — live in; StorageIntegrationFQN references a blob storage
 // integration (e.g. of a truefoundry_azure_account).
 type MlRepoManifest struct {
-	Type                  string         `json:"type"`
-	Name                  string         `json:"name"`
-	Description           string         `json:"description,omitempty"`
-	StorageIntegrationFQN string         `json:"storage_integration_fqn"`
-	Collaborators         []Collaborator `json:"collaborators"`
+	Type                  string          `json:"type"`
+	Name                  string          `json:"name"`
+	Description           string          `json:"description,omitempty"`
+	StorageIntegrationFQN string          `json:"storage_integration_fqn"`
+	Collaborators         *[]Collaborator `json:"collaborators,omitempty"`
 }
 
 // MlRepo is one entry of GET /api/svc/v1/ml-repos and the data of a

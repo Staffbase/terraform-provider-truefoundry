@@ -16,11 +16,4 @@ resource "truefoundry_ml_repo" "gateway_artifacts" {
   name                    = "gateway-artifacts"
   description             = "Skills and prompts of the AI gateway"
   storage_integration_fqn = "${truefoundry_azure_account.storage.fqn}:blob-storage:artifacts"
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mlf-project-admin"
-    },
-  ]
 }

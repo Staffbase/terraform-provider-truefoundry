@@ -55,13 +55,6 @@ resource "truefoundry_agent" "support_triage" {
     }
   }
 
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "agent-access"
-    },
-  ]
-
   tags = {
     team = "support"
   }

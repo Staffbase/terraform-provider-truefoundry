@@ -3,14 +3,14 @@
 page_title: "truefoundry_role Resource - TrueFoundry"
 subcategory: ""
 description: |-
-  Manages a custom TrueFoundry role (role manifest) — a named set of permissions that role_id references such as a truefoundry_ml_repo collaborator resolve against. Only roles scoped to the whole tenant or to a team can be user-defined; the control plane reserves every other scope.
+  Manages a custom TrueFoundry role (role manifest) — a named set of permissions that truefoundry_role_binding permissions resolve against via their role. Only roles scoped to the whole tenant or to a team can be user-defined; the control plane reserves every other scope.
   Roles TrueFoundry provides itself come in two flavours. Reserved roles (is_editable = false) cannot be managed at all and this resource refuses to adopt them. Default roles (is_default = true, e.g. member) can be updated in place, but they exist independently of Terraform — import them, never create them, and note that destroying one only removes it from state, leaving the control plane object with whatever permissions the last apply gave it.
   Import an existing role by its name: terraform import truefoundry_role.example member.
 ---
 
 # truefoundry_role (Resource)
 
-Manages a custom TrueFoundry role (`role` manifest) — a named set of permissions that `role_id` references such as a `truefoundry_ml_repo` collaborator resolve against. Only roles scoped to the whole tenant or to a team can be user-defined; the control plane reserves every other scope.
+Manages a custom TrueFoundry role (`role` manifest) — a named set of permissions that `truefoundry_role_binding` permissions resolve against via their `role`. Only roles scoped to the whole tenant or to a team can be user-defined; the control plane reserves every other scope.
 
 Roles TrueFoundry provides itself come in two flavours. Reserved roles (`is_editable = false`) cannot be managed at all and this resource refuses to adopt them. Default roles (`is_default = true`, e.g. `member`) can be updated in place, but they exist independently of Terraform — **import them, never create them**, and note that destroying one only removes it from state, leaving the control plane object with whatever permissions the last apply gave it.
 
@@ -105,5 +105,5 @@ terraform import truefoundry_role.member member
 
 # Roles TrueFoundry reserves (is_editable = false, e.g. `tenant-admin` or
 # `secret-group-viewer`) cannot be imported at all — reference them by name
-# from a `role_id` attribute instead.
+# from the `role` of a truefoundry_role_binding permission instead.
 ```

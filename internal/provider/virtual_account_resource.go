@@ -28,6 +28,14 @@ var (
 
 var expirationDateRegexp = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
+// virtualAccountPermissionsDeprecation is the deprecation message of the
+// virtual account `permissions` attribute, which control plane v0.172.0
+// replaced with role-binding manifests.
+const virtualAccountPermissionsDeprecation = "TrueFoundry retires virtual account permissions on 15 Nov 2026 " +
+	"(control plane v0.172.0 moved access control into role bindings); applies that still send them fail after " +
+	"that date. Grant access with truefoundry_role_binding and a virtualaccount subject instead, then remove " +
+	"this attribute — removing it leaves existing grants in place. See the \"Migrating to role bindings\" guide."
+
 func newVirtualAccountResource() resource.Resource {
 	return &virtualAccountResource{}
 }
@@ -72,7 +80,8 @@ func (r *virtualAccountResource) Metadata(_ context.Context, req resource.Metada
 
 func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages a TrueFoundry virtual account (service account) and its permissions. " +
+		Description: "Manages a TrueFoundry virtual account (service account). Grant it access with " +
+			"`truefoundry_role_binding` and a `virtualaccount` subject. " +
 			"The account's API token is exposed as the sensitive `token` attribute; alternatively, " +
 			"`secret_store_config` syncs it into a secret store. The token is only refreshed on read " +
 			"when `auto_rotate` is set or the token isn't in state yet (e.g. right after import), so a " +
@@ -94,9 +103,13 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
 			"permissions": schema.SetNestedAttribute{
-				Required:    true,
-				Description: "Roles granted to this virtual account on specific resources.",
-				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
+				Optional:           true,
+				DeprecationMessage: virtualAccountPermissionsDeprecation,
+				Description: "Roles granted to this virtual account on specific resources; use `truefoundry_role_binding` " +
+					"with a `virtualaccount` subject instead. Unset leaves the account's grants on the " +
+					"control plane untouched (and they are not tracked). Must not be empty: the control plane rejects " +
+					"an empty list.",
+				Validators: []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"resource_fqn": schema.StringAttribute{
@@ -222,6 +235,7 @@ func (r *virtualAccountResource) Read(ctx context.Context, req resource.ReadRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	account, err := r.client.GetVirtualAccount(ctx, state.ID.ValueString())
 	if client.IsNotFound(err) {
@@ -233,7 +247,7 @@ func (r *virtualAccountResource) Read(ctx context.Context, req resource.ReadRequ
 		resp.Diagnostics.AddError("Reading TrueFoundry virtual account failed", err.Error())
 		return
 	}
-	virtualAccountManifestToModel(account, &state)
+	virtualAccountManifestToModel(account, &state, imported)
 
 	// The token is set once on create and otherwise left as-is: an
 	// already-known token is only refetched when auto_rotate is on (the
@@ -290,16 +304,18 @@ func (r *virtualAccountResource) Delete(ctx context.Context, req resource.Delete
 // the manifest attributes and fetches the current token.
 func (r *virtualAccountResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("id"), req, resp)
+	markImported(ctx, resp)
 }
 
 func virtualAccountManifestFromModel(m *virtualAccountModel) client.VirtualAccountManifest {
 	manifest := client.VirtualAccountManifest{
 		Name:           m.Name.ValueString(),
 		Type:           "virtual-account",
-		Permissions:    []client.Permission{},
 		ExpirationDate: m.ExpirationDate.ValueString(),
 		TokenType:      m.TokenType.ValueString(),
 	}
+	// Unset permissions are omitted, which leaves the account's existing
+	// grants untouched; an empty set is rejected at plan time.
 	for _, p := range m.Permissions {
 		manifest.Permissions = append(manifest.Permissions, client.Permission{
 			ResourceFQN:  p.ResourceFQN.ValueString(),
@@ -328,19 +344,24 @@ func virtualAccountManifestFromModel(m *virtualAccountModel) client.VirtualAccou
 	return manifest
 }
 
-func virtualAccountManifestToModel(account *client.VirtualAccount, state *virtualAccountModel) {
+func virtualAccountManifestToModel(account *client.VirtualAccount, state *virtualAccountModel, imported bool) {
 	manifest := account.Manifest
 	state.ID = types.StringValue(account.ID)
 	state.Name = types.StringValue(manifest.Name)
 	state.ExpirationDate = stringOrNull(manifest.ExpirationDate)
 	state.TokenType = stringOrNull(manifest.TokenType)
-	state.Permissions = nil
-	for _, p := range manifest.Permissions {
-		state.Permissions = append(state.Permissions, permissionModel{
-			ResourceFQN:  types.StringValue(p.ResourceFQN),
-			ResourceType: types.StringValue(p.ResourceType),
-			RoleID:       types.StringValue(p.RoleID),
-		})
+	// Like collaborators (see refreshCollaborators): an unset attribute stays
+	// unset unless the account was just imported, and a response without
+	// permissions keeps the prior value.
+	if (state.Permissions != nil || imported) && len(manifest.Permissions) > 0 {
+		state.Permissions = make([]permissionModel, 0, len(manifest.Permissions))
+		for _, p := range manifest.Permissions {
+			state.Permissions = append(state.Permissions, permissionModel{
+				ResourceFQN:  types.StringValue(p.ResourceFQN),
+				ResourceType: types.StringValue(p.ResourceType),
+				RoleID:       types.StringValue(p.RoleID),
+			})
+		}
 	}
 	state.Tags = nil
 	if len(manifest.Tags) > 0 {

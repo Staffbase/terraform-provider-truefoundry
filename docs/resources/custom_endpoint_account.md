@@ -69,7 +69,7 @@ resource "truefoundry_custom_endpoint_account" "internal_llm" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this custom endpoint account. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this custom endpoint account; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `endpoint_type` (String) Type of service behind the endpoints, used for tracking. One of: `azure-speech-service`, `other`.
 - `routing_type` (String) Load balancing across the endpoints: `weight` or `priority`. Unset means each endpoint is only reachable individually at /proxy-api/{account-name}/{endpoint-name}.
 - `slug` (String) Identifier of the load balancer, reachable at /proxy-api/{account-name}/{slug}/{upstream-path}. Required when `routing_type` is set.

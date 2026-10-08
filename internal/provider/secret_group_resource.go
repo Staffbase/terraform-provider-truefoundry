@@ -100,23 +100,7 @@ func (r *secretGroupResource) Schema(_ context.Context, _ resource.SchemaRequest
 					stringvalidator.RegexMatches(secretStoreFQNRegexp, "must be a secret-store integration FQN, e.g. my-tenant:truefoundry:my-account:secret-store:my-store"),
 				},
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this secret group.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-						},
-						"role_id": schema.StringAttribute{
-							Required: true,
-							Description: "Role to assign: secret-group-admin, secret-group-manager, secret-group-editor, " +
-								"secret-group-access, or secret-group-viewer.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("secret group", "secret-group-admin, secret-group-manager, secret-group-editor, secret-group-access, or secret-group-viewer"),
 		},
 	}
 }
@@ -152,6 +136,7 @@ func (r *secretGroupResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	group, found, err := getSecretGroupByName(ctx, r.client, state.Name.ValueString())
 	if err != nil {
@@ -165,7 +150,7 @@ func (r *secretGroupResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	secretGroupToModel(group, &state)
+	secretGroupToModel(group, &state, imported)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
@@ -198,6 +183,7 @@ func (r *secretGroupResource) Delete(ctx context.Context, req resource.DeleteReq
 // ImportState imports a secret group by its name, e.g. "system".
 func (r *secretGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	markImported(ctx, resp)
 }
 
 // apply writes the manifest and reads the group back, since the generic apply
@@ -248,18 +234,12 @@ func getSecretGroupByName(ctx context.Context, c *client.Client, name string) (*
 	return nil, false, nil
 }
 
-func secretGroupToModel(group *client.SecretGroup, m *secretGroupResourceModel) {
+func secretGroupToModel(group *client.SecretGroup, m *secretGroupResourceModel, imported bool) {
 	m.ID = types.StringValue(group.ID)
 	m.FQN = types.StringValue(group.FQN)
 	m.Name = types.StringValue(group.Manifest.Name)
 	m.IntegrationFQN = types.StringValue(group.Manifest.IntegrationFQN)
-	m.Collaborators = nil
-	for _, c := range group.Manifest.Collaborators {
-		m.Collaborators = append(m.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	m.Collaborators = refreshCollaborators(m.Collaborators, group.Manifest.Collaborators, imported)
 }
 
 func secretGroupManifestFromModel(m *secretGroupResourceModel) client.SecretGroupManifest {
@@ -267,13 +247,7 @@ func secretGroupManifestFromModel(m *secretGroupResourceModel) client.SecretGrou
 		Type:           secretGroupManifestType,
 		Name:           m.Name.ValueString(),
 		IntegrationFQN: m.IntegrationFQN.ValueString(),
-		Collaborators:  []client.Collaborator{},
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
+		Collaborators:  collaboratorsToManifest(m.Collaborators),
 	}
 	return manifest
 }

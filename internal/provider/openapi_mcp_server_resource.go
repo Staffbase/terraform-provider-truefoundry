@@ -198,22 +198,7 @@ func (r *openapiMcpServerResource) Schema(_ context.Context, _ resource.SchemaRe
 				ElementType: types.StringType,
 				Description: "Non-secret custom headers sent to the API with every request.",
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this MCP server.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-						},
-						"role_id": schema.StringAttribute{
-							Required:    true,
-							Description: "Role to assign, e.g. mcp-server-user or mcp-server-manager.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("MCP server", "mcp-server-user or mcp-server-manager"),
 			"tags": schema.MapAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
@@ -297,6 +282,7 @@ func (r *openapiMcpServerResource) Read(ctx context.Context, req resource.ReadRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	server, found, err := getMcpServer(ctx, r.client, state.FQN.ValueString())
 	if err != nil {
@@ -345,13 +331,7 @@ func (r *openapiMcpServerResource) Read(ctx context.Context, req resource.ReadRe
 		state.TLS = nil
 	}
 	state.AdditionalHeaders = stringMapToModel(server.Manifest.AdditionalHeaders)
-	state.Collaborators = nil
-	for _, c := range server.Manifest.Collaborators {
-		state.Collaborators = append(state.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	state.Collaborators = refreshCollaborators(state.Collaborators, server.Manifest.Collaborators, imported)
 	state.Tags = stringMapToModel(server.Manifest.Tags)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -385,6 +365,7 @@ func (r *openapiMcpServerResource) Delete(ctx context.Context, req resource.Dele
 // ImportState imports an OpenAPI MCP server by its FQN, e.g. "my-tenant:mcp-server:my-server".
 func (r *openapiMcpServerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("fqn"), req, resp)
+	markImported(ctx, resp)
 }
 
 // apply sends the manifest and resolves ID and FQN. The apply response for
@@ -420,7 +401,7 @@ func openapiMcpServerManifestFromModel(m *openapiMcpServerModel) client.McpServe
 		Description:   m.Description.ValueString(),
 		URL:           m.URL.ValueString(),
 		AuthData:      mcpAuthFromModel(m.Auth),
-		Collaborators: []client.Collaborator{},
+		Collaborators: collaboratorsToManifest(m.Collaborators),
 	}
 	if m.OpenAPISpecSource != nil {
 		manifest.OpenAPISpecSource = &client.OpenApiSpecSource{
@@ -443,12 +424,6 @@ func openapiMcpServerManifestFromModel(m *openapiMcpServerModel) client.McpServe
 		}
 	}
 	manifest.AdditionalHeaders = stringMapFromModel(m.AdditionalHeaders)
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
-	}
 	manifest.Tags = stringMapFromModel(m.Tags)
 	return manifest
 }

@@ -36,13 +36,6 @@ resource "truefoundry_openapi_mcp_server" "picklerick" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }
 
 # A spec shipped with the Terraform configuration; all operations become
