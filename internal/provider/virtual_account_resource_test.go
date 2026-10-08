@@ -6,7 +6,10 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
+	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
 func TestAccVirtualAccount_lifecycle(t *testing.T) {
@@ -74,6 +77,14 @@ resource "truefoundry_virtual_account" "ci" {
   }
 }
 `,
+				// An in-place update keeps the token, so the plan must carry
+				// it as known instead of "(known after apply)".
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("truefoundry_virtual_account.ci", plancheck.ResourceActionUpdate),
+						plancheck.ExpectKnownValue("truefoundry_virtual_account.ci", tfjsonpath.New("token"), knownvalue.StringExact("mock-token-va-1")),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "permissions.#", "2"),
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "expiration_date", "2027-01-31"),
@@ -95,7 +106,13 @@ resource "truefoundry_virtual_account" "ci" {
   ]
 }
 `,
-				ConfigPlanChecks: replacePlanCheck("truefoundry_virtual_account.ci"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("truefoundry_virtual_account.ci", plancheck.ResourceActionReplace),
+						// A replacement issues a new token.
+						plancheck.ExpectUnknownValue("truefoundry_virtual_account.ci", tfjsonpath.New("token")),
+					},
+				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_virtual_account.ci", "token", "mock-token-va-2"),
 					func(*terraform.State) error {

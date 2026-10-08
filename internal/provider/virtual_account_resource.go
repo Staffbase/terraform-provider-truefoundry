@@ -171,6 +171,10 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 			"token": schema.StringAttribute{
 				Computed:  true,
 				Sensitive: true,
+				// Update never changes the token (it copies the state value),
+				// so without this every in-place update would plan a
+				// spurious "~ token = (sensitive value)".
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 				Description: "Current API token of the virtual account. Set once on create; only refreshed on " +
 					"read when `auto_rotate` is set (or the token isn't in state yet, e.g. right after import).",
 			},
