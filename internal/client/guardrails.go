@@ -31,7 +31,7 @@ type GuardrailConfig struct {
 type GuardrailGroupManifest struct {
 	Type          string            `json:"type"`
 	Name          string            `json:"name"`
-	Collaborators []Collaborator    `json:"collaborators,omitempty"`
+	Collaborators *[]Collaborator   `json:"collaborators,omitempty"`
 	Integrations  []GuardrailConfig `json:"integrations"`
 }
 

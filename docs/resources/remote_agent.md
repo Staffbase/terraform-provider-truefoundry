@@ -31,13 +31,6 @@ resource "truefoundry_remote_agent" "billing" {
       "Authorization" = "my-tenant:hashicorp:vault-secrets:secret-store:vault::agents/billing/token"
     }
   }
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "agent-access"
-    },
-  ]
 }
 ```
 
@@ -54,7 +47,7 @@ resource "truefoundry_remote_agent" "billing" {
 ### Optional
 
 - `auth` (Attributes) How the gateway authenticates against the agent. Omitted means no authentication. `type` selects the mode; `headers` belongs to mode `header`. (see [below for nested schema](#nestedatt--auth))
-- `collaborators` (Attributes Set) Subjects with a role on this agent. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this agent; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `tags` (Map of String) Free-form key-value tags on the agent.
 
 ### Read-Only

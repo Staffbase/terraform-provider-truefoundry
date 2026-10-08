@@ -31,13 +31,6 @@ resource "truefoundry_virtual_mcp_server" "docs" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }
 ```
 
@@ -52,7 +45,7 @@ resource "truefoundry_virtual_mcp_server" "docs" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this virtual MCP server. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this virtual MCP server; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `tags` (Map of String) Free-form key-value tags on the virtual MCP server.
 
 ### Read-Only

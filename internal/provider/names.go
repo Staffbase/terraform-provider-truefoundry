@@ -70,6 +70,11 @@ const (
 	// maxRoleNameLen applies to custom roles.
 	maxRoleNameLen = 35
 
+	// maxRoleBindingNameLen applies to role bindings. Unlike the other
+	// families it comes from the published API reference (pattern
+	// "^[a-z][a-z0-9-]{1,64}[a-z0-9]$"), not from a dryRun probe.
+	maxRoleBindingNameLen = 66
+
 	// maxMlRepoNameLen applies to ML repos.
 	maxMlRepoNameLen = 100
 

@@ -124,7 +124,7 @@ func (r *remoteAgentResource) Schema(_ context.Context, _ resource.SchemaRequest
 					},
 				},
 			},
-			"collaborators": agentCollaboratorsAttribute(),
+			"collaborators": collaboratorsAttribute("agent", "agent-access or agent-manager"),
 			"tags":          agentTagsAttribute(),
 		},
 	}
@@ -210,6 +210,7 @@ func (r *remoteAgentResource) Read(ctx context.Context, req resource.ReadRequest
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	agent, found, err := getAgentByName(ctx, r.client, state.Name.ValueString())
 	if err != nil {
@@ -253,13 +254,7 @@ func (r *remoteAgentResource) Read(ctx context.Context, req resource.ReadRequest
 			Headers: stringMapToModel(auth.Headers),
 		}
 	}
-	state.Collaborators = nil
-	for _, c := range manifest.Collaborators {
-		state.Collaborators = append(state.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	state.Collaborators = refreshCollaborators(state.Collaborators, manifest.Collaborators, imported)
 	state.Tags = stringMapToModel(manifest.Tags)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -293,6 +288,7 @@ func (r *remoteAgentResource) Delete(ctx context.Context, req resource.DeleteReq
 // ImportState imports a remote agent by its name, e.g. "my-agent".
 func (r *remoteAgentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	markImported(ctx, resp)
 }
 
 // apply sends the manifest; the response's new agent version carries the
@@ -317,7 +313,7 @@ func remoteAgentManifestFromModel(m *remoteAgentModel) client.AgentManifest {
 		Name:          m.Name.ValueString(),
 		Description:   m.Description.ValueString(),
 		URL:           m.URL.ValueString(),
-		Collaborators: []client.Collaborator{},
+		Collaborators: collaboratorsToManifest(m.Collaborators),
 	}
 	if f := m.Framework; f != nil {
 		manifest.Framework = &client.AgentFramework{
@@ -330,12 +326,6 @@ func remoteAgentManifestFromModel(m *remoteAgentModel) client.AgentManifest {
 			Type:    auth.Type.ValueString(),
 			Headers: stringMapFromModel(auth.Headers),
 		}
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
 	}
 	manifest.Tags = stringMapFromModel(m.Tags)
 	return manifest

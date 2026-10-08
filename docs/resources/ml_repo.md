@@ -31,13 +31,6 @@ resource "truefoundry_ml_repo" "gateway_artifacts" {
   name                    = "gateway-artifacts"
   description             = "Skills and prompts of the AI gateway"
   storage_integration_fqn = "${truefoundry_azure_account.storage.fqn}:blob-storage:artifacts"
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mlf-project-admin"
-    },
-  ]
 }
 ```
 
@@ -51,7 +44,7 @@ resource "truefoundry_ml_repo" "gateway_artifacts" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this ML repo. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this ML repo; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `description` (String) Human-readable description of what the repo contains.
 
 ### Read-Only

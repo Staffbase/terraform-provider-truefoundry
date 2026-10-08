@@ -9,6 +9,10 @@ import (
 const virtualAccountsPath = "/api/svc/v1/virtual-accounts"
 
 // Permission grants a role on a resource to a virtual account.
+//
+// Deprecated on the control plane since v0.172.0 in favour of role-binding
+// manifests and rejected after 15 Nov 2026. An omitted permissions field
+// leaves the account's existing grants untouched; an empty list is rejected.
 type Permission struct {
 	ResourceFQN  string `json:"resource_fqn"`
 	ResourceType string `json:"resource_type"`
@@ -38,7 +42,7 @@ type AutoRotate struct {
 type VirtualAccountManifest struct {
 	Name              string             `json:"name"`
 	Type              string             `json:"type"` // always "virtual-account"
-	Permissions       []Permission       `json:"permissions"`
+	Permissions       []Permission       `json:"permissions,omitempty"`
 	ExpirationDate    string             `json:"expiration_date,omitempty"`
 	TokenType         string             `json:"token_type,omitempty"` // jwt or opaque
 	Tags              map[string]string  `json:"tags,omitempty"`

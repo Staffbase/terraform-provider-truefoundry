@@ -16,11 +16,4 @@ resource "truefoundry_remote_agent" "billing" {
       "Authorization" = "my-tenant:hashicorp:vault-secrets:secret-store:vault::agents/billing/token"
     }
   }
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "agent-access"
-    },
-  ]
 }
