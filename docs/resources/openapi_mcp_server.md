@@ -51,13 +51,6 @@ resource "truefoundry_openapi_mcp_server" "picklerick" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }
 
 # A spec shipped with the Terraform configuration; all operations become
@@ -90,7 +83,7 @@ resource "truefoundry_openapi_mcp_server" "petstore" {
 
 - `additional_headers` (Map of String) Non-secret custom headers sent to the API with every request.
 - `auth` (Attributes) How the gateway authenticates against the MCP server. Omitted means no authentication. `type` selects the mode; the other fields belong to one mode each. (see [below for nested schema](#nestedatt--auth))
-- `collaborators` (Attributes Set) Subjects with a role on this MCP server. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this MCP server; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `enable_all_tools` (Boolean) Expose every operation of the spec as a tool instead of only those listed in `tool_settings`.
 - `tags` (Map of String) Free-form key-value tags on the MCP server.
 - `tls` (Attributes) TLS verification settings for the connection to the API. (see [below for nested schema](#nestedatt--tls))

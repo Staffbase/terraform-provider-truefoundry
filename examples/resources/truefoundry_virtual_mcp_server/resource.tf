@@ -16,11 +16,4 @@ resource "truefoundry_virtual_mcp_server" "docs" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }

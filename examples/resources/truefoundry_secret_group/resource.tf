@@ -15,11 +15,6 @@ resource "truefoundry_secret_group" "system" {
   name            = "system"
   integration_fqn = "${truefoundry_system_secret_store.system.fqn}:secret-store:system-secret-store"
 
-  collaborators = [
-    { subject = "user:jane@example.com", role_id = "secret-group-viewer" },
-    { subject = "team:platform", role_id = "secret-group-editor" },
-  ]
-
   # Destroying or renaming the group deletes every secret in it, and Terraform
   # cannot recreate them. Guard groups that back live credentials.
   lifecycle {

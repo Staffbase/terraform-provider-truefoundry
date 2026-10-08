@@ -57,11 +57,6 @@ type guardrailGroupModel struct {
 	Guardrails    []guardrailModel    `tfsdk:"guardrails"`
 }
 
-type collaboratorModel struct {
-	Subject types.String `tfsdk:"subject"`
-	RoleID  types.String `tfsdk:"role_id"`
-}
-
 type guardrailModel struct {
 	Type              types.String `tfsdk:"type"`
 	Name              types.String `tfsdk:"name"`
@@ -107,22 +102,7 @@ func (r *guardrailGroupResource) Schema(_ context.Context, _ resource.SchemaRequ
 				},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this guardrail config group.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:my-team.",
-						},
-						"role_id": schema.StringAttribute{
-							Required:    true,
-							Description: "Role to assign, e.g. provider-account-manager.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("guardrail config group", "provider-account-manager"),
 			"guardrails": schema.ListNestedAttribute{
 				Required:      true,
 				Description:   "Guardrail configs in this group.",
@@ -281,6 +261,7 @@ func (r *guardrailGroupResource) Read(ctx context.Context, req resource.ReadRequ
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	integrations, err := r.client.ListGuardrailIntegrations(ctx, "")
 	if err != nil {
@@ -312,13 +293,7 @@ func (r *guardrailGroupResource) Read(ctx context.Context, req resource.ReadRequ
 	if account != nil {
 		state.ID = types.StringValue(account.ID)
 		state.Name = types.StringValue(account.Manifest.Name)
-		state.Collaborators = nil
-		for _, c := range account.Manifest.Collaborators {
-			state.Collaborators = append(state.Collaborators, collaboratorModel{
-				Subject: types.StringValue(c.Subject),
-				RoleID:  types.StringValue(c.RoleID),
-			})
-		}
+		state.Collaborators = refreshCollaborators(state.Collaborators, account.Manifest.Collaborators, imported)
 	}
 
 	// Rebuild the list keeping configured order for entries that still exist
@@ -375,6 +350,7 @@ func (r *guardrailGroupResource) Delete(ctx context.Context, req resource.Delete
 // "my-tenant:guardrail-config-group:my-group".
 func (r *guardrailGroupResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("fqn"), req, resp)
+	markImported(ctx, resp)
 }
 
 func (r *guardrailGroupResource) apply(ctx context.Context, plan *guardrailGroupModel, diags *diag.Diagnostics) {
@@ -393,15 +369,10 @@ func (r *guardrailGroupResource) apply(ctx context.Context, plan *guardrailGroup
 
 func guardrailGroupManifestFromModel(m *guardrailGroupModel) client.GuardrailGroupManifest {
 	manifest := client.GuardrailGroupManifest{
-		Type:         "provider-account/guardrail-config-group",
-		Name:         m.Name.ValueString(),
-		Integrations: []client.GuardrailConfig{},
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
+		Type:          "provider-account/guardrail-config-group",
+		Name:          m.Name.ValueString(),
+		Integrations:  []client.GuardrailConfig{},
+		Collaborators: collaboratorsToManifest(m.Collaborators),
 	}
 	for _, g := range m.Guardrails {
 		config := client.GuardrailConfig{

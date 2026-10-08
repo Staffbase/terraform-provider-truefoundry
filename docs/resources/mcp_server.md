@@ -37,13 +37,6 @@ resource "truefoundry_mcp_server" "deepwiki" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }
 
 # A remote MCP server behind an OAuth2 (OIDC) identity provider; each
@@ -82,7 +75,7 @@ resource "truefoundry_mcp_server" "internal_api" {
 
 - `additional_headers` (Map of String) Non-secret custom headers sent to the MCP server with every request.
 - `auth` (Attributes) How the gateway authenticates against the MCP server. Omitted means no authentication. `type` selects the mode; the other fields belong to one mode each. (see [below for nested schema](#nestedatt--auth))
-- `collaborators` (Attributes Set) Subjects with a role on this MCP server. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this MCP server; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `tags` (Map of String) Free-form key-value tags on the MCP server.
 - `tls` (Attributes) TLS verification settings for the connection to the MCP server. (see [below for nested schema](#nestedatt--tls))
 - `tool_settings` (Attributes List) Per-tool overrides for the tools the MCP server exposes. (see [below for nested schema](#nestedatt--tool_settings))

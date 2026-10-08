@@ -414,29 +414,8 @@ func (r *agentResource) Schema(_ context.Context, _ resource.SchemaRequest, resp
 					"ask_user_questions": agentToggleAttribute("Let the agent ask the user clarifying questions."),
 				},
 			},
-			"collaborators": agentCollaboratorsAttribute(),
+			"collaborators": collaboratorsAttribute("agent", "agent-access or agent-manager"),
 			"tags":          agentTagsAttribute(),
-		},
-	}
-}
-
-// agentCollaboratorsAttribute is the shared collaborators attribute of both
-// agent resources.
-func agentCollaboratorsAttribute() schema.SetNestedAttribute {
-	return schema.SetNestedAttribute{
-		Optional:    true,
-		Description: "Subjects with a role on this agent.",
-		NestedObject: schema.NestedAttributeObject{
-			Attributes: map[string]schema.Attribute{
-				"subject": schema.StringAttribute{
-					Required:    true,
-					Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-				},
-				"role_id": schema.StringAttribute{
-					Required:    true,
-					Description: "Role to assign, e.g. agent-access or agent-manager.",
-				},
-			},
 		},
 	}
 }
@@ -512,6 +491,7 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	agent, found, err := getAgentByName(ctx, r.client, state.Name.ValueString())
 	if err != nil {
@@ -572,13 +552,7 @@ func (r *agentResource) Read(ctx context.Context, req resource.ReadRequest, resp
 	}
 	state.ResponseFormat = agentResponseFormatToModel(manifest.ResponseFormat)
 	state.Config = agentConfigToModel(manifest.Config)
-	state.Collaborators = nil
-	for _, c := range manifest.Collaborators {
-		state.Collaborators = append(state.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	state.Collaborators = refreshCollaborators(state.Collaborators, manifest.Collaborators, imported)
 	state.Tags = stringMapToModel(manifest.Tags)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -612,6 +586,7 @@ func (r *agentResource) Delete(ctx context.Context, req resource.DeleteRequest, 
 // ImportState imports an agent by its name, e.g. "my-agent".
 func (r *agentResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	markImported(ctx, resp)
 }
 
 // apply sends the manifest; the response's new agent version carries the
@@ -665,7 +640,7 @@ func agentManifestFromModel(m *agentResourceModel) client.AgentManifest {
 		Name:          m.Name.ValueString(),
 		Description:   m.Description.ValueString(),
 		Instructions:  m.Instructions.ValueString(),
-		Collaborators: []client.Collaborator{},
+		Collaborators: collaboratorsToManifest(m.Collaborators),
 	}
 	if m.Model != nil {
 		model := &client.AgentModel{Name: m.Model.Name.ValueString()}
@@ -751,12 +726,6 @@ func agentManifestFromModel(m *agentResourceModel) client.AgentManifest {
 			}
 		}
 		manifest.Config = config
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
 	}
 	manifest.Tags = stringMapFromModel(m.Tags)
 	return manifest

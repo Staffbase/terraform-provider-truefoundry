@@ -1,14 +1,7 @@
-# A service account for CI with access to one provider account.
+# A service account for CI. Grant it access with a truefoundry_role_binding
+# (see below) rather than the deprecated `permissions` attribute.
 resource "truefoundry_virtual_account" "ci" {
   name = "ci-bot"
-
-  permissions = [
-    {
-      resource_fqn  = "my-tenant:azure-openai:my-azure-openai"
-      resource_type = "provider-account"
-      role_id       = "provider-account-access"
-    },
-  ]
 
   expiration_date = "2027-01-31"
   token_type      = "jwt"
@@ -33,4 +26,21 @@ resource "truefoundry_virtual_account" "ci" {
 output "ci_bot_token" {
   value     = truefoundry_virtual_account.ci.token
   sensitive = true
+}
+
+# Access to one provider account.
+resource "truefoundry_role_binding" "ci" {
+  name = "va-ci-bot"
+
+  subjects = [
+    { type = "virtualaccount", name = truefoundry_virtual_account.ci.name },
+  ]
+
+  permissions = [
+    {
+      resource_type = "provider-account"
+      resource_fqn  = "my-tenant:azure-openai:my-azure-openai"
+      role          = "provider-account-access"
+    },
+  ]
 }

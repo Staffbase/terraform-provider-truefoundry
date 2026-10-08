@@ -36,11 +36,6 @@ resource "truefoundry_secret_group" "system" {
   name            = "system"
   integration_fqn = "${truefoundry_system_secret_store.system.fqn}:secret-store:system-secret-store"
 
-  collaborators = [
-    { subject = "user:jane@example.com", role_id = "secret-group-viewer" },
-    { subject = "team:platform", role_id = "secret-group-editor" },
-  ]
-
   # Destroying or renaming the group deletes every secret in it, and Terraform
   # cannot recreate them. Guard groups that back live credentials.
   lifecycle {
@@ -67,7 +62,7 @@ resource "truefoundry_secret_group" "system" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this secret group. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this secret group; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 
 ### Read-Only
 
@@ -79,7 +74,7 @@ resource "truefoundry_secret_group" "system" {
 
 Required:
 
-- `role_id` (String) Role to assign: secret-group-admin, secret-group-manager, secret-group-editor, secret-group-access, or secret-group-viewer.
+- `role_id` (String) Role to assign, e.g. secret-group-admin, secret-group-manager, secret-group-editor, secret-group-access, or secret-group-viewer.
 - `subject` (String) Subject FQN, e.g. user:jane@example.com or team:everyone.
 
 ## Import

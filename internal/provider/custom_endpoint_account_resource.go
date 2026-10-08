@@ -128,22 +128,7 @@ func (r *customEndpointAccountResource) Schema(_ context.Context, _ resource.Sch
 				Optional:    true,
 				Description: "Identifier of the load balancer, reachable at /proxy-api/{account-name}/{slug}/{upstream-path}. Required when `routing_type` is set.",
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this custom endpoint account.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-						},
-						"role_id": schema.StringAttribute{
-							Required:    true,
-							Description: "Role to assign, e.g. provider-account-access.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("custom endpoint account", "provider-account-access"),
 			"endpoints": schema.ListNestedAttribute{
 				Required:      true,
 				Description:   "Upstream endpoints proxied through this account.",
@@ -320,6 +305,7 @@ func (r *customEndpointAccountResource) Read(ctx context.Context, req resource.R
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	// Custom endpoint integrations are listed as "model" integrations.
 	integrations, err := r.client.ListModelIntegrations(ctx, "")
@@ -352,13 +338,7 @@ func (r *customEndpointAccountResource) Read(ctx context.Context, req resource.R
 		state.EndpointType = stringOrNull(account.Manifest.EndpointType)
 		state.RoutingType = stringOrNull(account.Manifest.RoutingType)
 		state.Slug = stringOrNull(account.Manifest.Slug)
-		state.Collaborators = nil
-		for _, c := range account.Manifest.Collaborators {
-			state.Collaborators = append(state.Collaborators, collaboratorModel{
-				Subject: types.StringValue(c.Subject),
-				RoleID:  types.StringValue(c.RoleID),
-			})
-		}
+		state.Collaborators = refreshCollaborators(state.Collaborators, account.Manifest.Collaborators, imported)
 	}
 
 	// Rebuild the list keeping configured order for entries that still exist
@@ -415,6 +395,7 @@ func (r *customEndpointAccountResource) Delete(ctx context.Context, req resource
 // "my-tenant:custom-endpoint:my-account".
 func (r *customEndpointAccountResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("fqn"), req, resp)
+	markImported(ctx, resp)
 }
 
 func (r *customEndpointAccountResource) apply(ctx context.Context, plan *customEndpointAccountModel, diags *diag.Diagnostics) {
@@ -433,18 +414,13 @@ func (r *customEndpointAccountResource) apply(ctx context.Context, plan *customE
 
 func customEndpointManifestFromModel(m *customEndpointAccountModel) client.ProviderAccountManifest {
 	manifest := client.ProviderAccountManifest{
-		Type:         "provider-account/custom-endpoint",
-		Name:         m.Name.ValueString(),
-		EndpointType: m.EndpointType.ValueString(),
-		RoutingType:  m.RoutingType.ValueString(),
-		Slug:         m.Slug.ValueString(),
-		Integrations: []client.ModelIntegration{},
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
+		Type:          "provider-account/custom-endpoint",
+		Name:          m.Name.ValueString(),
+		EndpointType:  m.EndpointType.ValueString(),
+		RoutingType:   m.RoutingType.ValueString(),
+		Slug:          m.Slug.ValueString(),
+		Collaborators: collaboratorsToManifest(m.Collaborators),
+		Integrations:  []client.ModelIntegration{},
 	}
 	for _, e := range m.Endpoints {
 		integration := client.ModelIntegration{

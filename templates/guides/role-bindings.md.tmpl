@@ -1,0 +1,140 @@
+---
+page_title: "Migrating to role bindings"
+subcategory: ""
+description: |-
+  Move per-resource collaborators and virtual account permissions to truefoundry_role_binding before TrueFoundry rejects them on 15 Nov 2026.
+---
+
+# Migrating to role bindings
+
+Control plane v0.172.0 moved access control out of the resources. Who may use
+a resource used to be stored inside it: the `collaborators` of a provider
+account, MCP server, agent, ML repo, or secret group, and the `permissions` of
+a virtual account. Access is now a separate **role binding**, a grant of the
+form "this subject has this role on this resource".
+
+TrueFoundry still accepts the old fields until **15 Nov 2026**. After that
+date, any apply that still sends them fails. Existing grants are kept either way.
+
+| Deprecated attribute | Resources |
+| --- | --- |
+| `collaborators` | `truefoundry_custom_endpoint_account`, `truefoundry_guardrail_group`, `truefoundry_mcp_server`, `truefoundry_openapi_mcp_server`, `truefoundry_virtual_mcp_server`, `truefoundry_agent`, `truefoundry_remote_agent`, `truefoundry_ml_repo`, `truefoundry_secret_group` |
+| `permissions` | `truefoundry_virtual_account` |
+
+Their replacement is [`truefoundry_role_binding`](../resources/role_binding.md).
+
+## How the deprecated attributes behave
+
+| In the configuration | Sent to the control plane | Effect |
+| --- | --- | --- |
+| attribute removed | nothing | existing grants stay; Terraform stops tracking them |
+| non-empty set | the list | grants are replaced |
+| `collaborators = []` | an empty list | grants are cleared (accepted until 15 Nov 2026) |
+
+Removing the attribute is safe. Nobody loses access, and later plans don't
+report the remaining grants as drift. `permissions = []` is not allowed: the
+control plane rejects an empty list for virtual accounts.
+
+## Field mapping
+
+A role binding has either **one subject with many permissions** or **many
+subjects with one permission**. Never many of both.
+
+| Before | After |
+| --- | --- |
+| `collaborators[*].subject = "user:jane@example.com"` | `subjects = [{ type = "user", name = "jane@example.com" }]` |
+| `collaborators[*].subject = "team:everyone"` | `subjects = [{ type = "team", name = "everyone" }]` |
+| `collaborators[*].role_id` | `permissions[*].role` |
+| the resource carrying the collaborators | `permissions[*].resource_type` and `permissions[*].resource_fqn` (its `fqn` attribute) |
+| virtual account `permissions[*].resource_fqn` / `resource_type` / `role_id` | `permissions[*].resource_fqn` / `resource_type` / `role` |
+| the virtual account carrying the permissions | `subjects = [{ type = "virtualaccount", name = "<account name>" }]` |
+
+Collaborators become **one binding per role**: all subjects with the same role
+share a binding. A virtual account's permissions become **one binding for the
+account** that holds all its permissions.
+
+## Porting collaborators
+
+```hcl
+resource "truefoundry_custom_endpoint_account" "speech" {
+  name = "speech"
+  # ...
+
+  collaborators = [
+    { subject = "user:jane@example.com", role_id = "provider-account-manager" },
+    { subject = "team:everyone", role_id = "provider-account-access" },
+  ]
+}
+```
+
+becomes:
+
+```hcl
+resource "truefoundry_custom_endpoint_account" "speech" {
+  name = "speech"
+  # ...
+}
+
+resource "truefoundry_role_binding" "speech_managers" {
+  name     = "speech-managers"
+  subjects = [{ type = "user", name = "jane@example.com" }]
+  permissions = [{
+    resource_type = "provider-account"
+    resource_fqn  = truefoundry_custom_endpoint_account.speech.fqn
+    role          = "provider-account-manager"
+  }]
+}
+
+resource "truefoundry_role_binding" "speech_users" {
+  name     = "speech-users"
+  subjects = [{ type = "team", name = "everyone" }]
+  permissions = [{
+    resource_type = "provider-account"
+    resource_fqn  = truefoundry_custom_endpoint_account.speech.fqn
+    role          = "provider-account-access"
+  }]
+}
+```
+
+## Porting virtual account permissions
+
+```hcl
+resource "truefoundry_virtual_account" "ci" {
+  name = "ci-bot"
+  permissions = [
+    { resource_type = "provider-account", resource_fqn = "my-tenant:azure-openai:gpt", role_id = "provider-account-access" },
+  ]
+}
+```
+
+becomes:
+
+```hcl
+resource "truefoundry_virtual_account" "ci" {
+  name = "ci-bot"
+}
+
+resource "truefoundry_role_binding" "ci" {
+  name     = "va-ci-bot"
+  subjects = [{ type = "virtualaccount", name = truefoundry_virtual_account.ci.name }]
+  permissions = [
+    { resource_type = "provider-account", resource_fqn = "my-tenant:azure-openai:gpt", role = "provider-account-access" },
+  ]
+}
+```
+
+## Rollout
+
+1. Add the `truefoundry_role_binding` resources and remove the deprecated
+   attributes in the same change, then apply. The old grants stay in place,
+   so access never drops.
+2. Check the resource's **Access Control** page in the TrueFoundry UI: every
+   grant should now appear through a role binding.
+3. Optional: to also remove the old grants that Terraform no longer tracks,
+   set `collaborators = []` on the resource, apply, then remove the attribute.
+   Do this before 15 Nov 2026, because the control plane rejects the empty list after that date.
+   Virtual account permissions can only be revoked in the UI.
+
+## More examples
+
+{{ tffile "examples/resources/truefoundry_role_binding/resource.tf" }}

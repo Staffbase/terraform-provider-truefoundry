@@ -3,13 +3,6 @@
 resource "truefoundry_guardrail_group" "region" {
   name = "guardrails-francecentral"
 
-  collaborators = [
-    {
-      subject = "user:jane@example.com"
-      role_id = "provider-account-manager"
-    },
-  ]
-
   guardrails = [
     {
       type               = "azure-prompt-shield"

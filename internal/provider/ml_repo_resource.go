@@ -80,22 +80,7 @@ func (r *mlRepoResource) Schema(_ context.Context, _ resource.SchemaRequest, res
 				Validators:    []validator.String{stringvalidator.LengthAtLeast(1)},
 				PlanModifiers: []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this ML repo.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-						},
-						"role_id": schema.StringAttribute{
-							Required:    true,
-							Description: "Role to assign, e.g. mlf-project-admin, mlf-project-editor, or mlf-project-viewer.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("ML repo", "mlf-project-admin, mlf-project-editor, or mlf-project-viewer"),
 		},
 	}
 }
@@ -131,6 +116,7 @@ func (r *mlRepoResource) Read(ctx context.Context, req resource.ReadRequest, res
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	repo, found, err := getMlRepoByName(ctx, r.client, state.Name.ValueString())
 	if err != nil {
@@ -148,13 +134,7 @@ func (r *mlRepoResource) Read(ctx context.Context, req resource.ReadRequest, res
 	state.Name = types.StringValue(repo.Manifest.Name)
 	state.Description = stringOrNull(repo.Manifest.Description)
 	state.StorageIntegrationFQN = types.StringValue(repo.Manifest.StorageIntegrationFQN)
-	state.Collaborators = nil
-	for _, c := range repo.Manifest.Collaborators {
-		state.Collaborators = append(state.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	state.Collaborators = refreshCollaborators(state.Collaborators, repo.Manifest.Collaborators, imported)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
@@ -187,6 +167,7 @@ func (r *mlRepoResource) Delete(ctx context.Context, req resource.DeleteRequest,
 // ImportState imports an ML repo by its name, e.g. "my-repo".
 func (r *mlRepoResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	markImported(ctx, resp)
 }
 
 func (r *mlRepoResource) apply(ctx context.Context, plan *mlRepoResourceModel, diags *diag.Diagnostics) {
@@ -217,13 +198,7 @@ func mlRepoManifestFromModel(m *mlRepoResourceModel) client.MlRepoManifest {
 		Name:                  m.Name.ValueString(),
 		Description:           m.Description.ValueString(),
 		StorageIntegrationFQN: m.StorageIntegrationFQN.ValueString(),
-		Collaborators:         []client.Collaborator{},
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
+		Collaborators:         collaboratorsToManifest(m.Collaborators),
 	}
 	return manifest
 }

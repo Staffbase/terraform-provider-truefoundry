@@ -37,8 +37,11 @@ type Server struct {
 	mlrepos      map[string]*mlRepo         // keyed by manifest name
 	skills       map[string]*artifactSeries // keyed by manifest name
 	prompts      map[string]*artifactSeries // keyed by manifest name
+	roleBindings map[string]*roleBinding    // keyed by manifest name
 	nextID       int
 	tokenReads   int // count of GET .../virtual-accounts/{id}/token requests
+
+	legacyGrantsRetired bool // see RetireLegacyGrants
 }
 
 type account struct {
@@ -70,7 +73,7 @@ type agent struct {
 
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, secretgroups: map[string]*secretGroup{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, nextID: 1}
+	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, secretgroups: map[string]*secretGroup{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, roleBindings: map[string]*roleBinding{}, nextID: 1}
 	s.seedBuiltinRoles()
 	return s
 }
@@ -102,6 +105,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/svc/v1/prompt-versions", s.auth(s.handleApplyPrompt))
 	mux.HandleFunc("GET /api/svc/v1/prompts", s.auth(s.handleListPrompts))
 	mux.HandleFunc("DELETE /api/svc/v1/prompts/{id}", s.auth(s.handleDeletePrompt))
+	mux.HandleFunc("PUT /api/svc/v1/role-bindings", s.auth(s.handleApplyRoleBinding))
+	mux.HandleFunc("GET /api/svc/v1/role-bindings", s.auth(s.handleListRoleBindings))
+	mux.HandleFunc("GET /api/svc/v1/role-bindings/{id}", s.auth(s.handleGetRoleBinding))
+	mux.HandleFunc("DELETE /api/svc/v1/role-bindings/{id}", s.auth(s.handleDeleteRoleBinding))
 	return mux
 }
 
@@ -206,9 +213,11 @@ func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": fmt.Sprintf("name must be 3-36 characters and match %q", accountNameRe.String())})
 		return
 	}
-	if _, ok := req.Manifest["permissions"].([]any); !ok {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "permissions are required"})
-		return
+	if raw, ok := req.Manifest["permissions"]; ok {
+		if permissions, ok := raw.([]any); !ok || len(permissions) == 0 {
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "permissions must not be empty; delete the virtual account instead"})
+			return
+		}
 	}
 	if tt, ok := req.Manifest["token_type"].(string); ok && tt != "jwt" && tt != "opaque" {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"message": "token_type must be jwt or opaque"})
@@ -229,12 +238,16 @@ func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Reques
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, req.Manifest, "permissions") {
+		return
+	}
 	va, exists := s.vaccounts[name]
 	if !exists {
 		va = &virtualAccount{id: "va-" + strconv.Itoa(s.nextID)}
 		va.token = "mock-token-" + va.id
 		s.nextID++
 	}
+	carryOverLegacyGrant(va.manifest, req.Manifest, "permissions")
 	resp := map[string]any{}
 	if !req.DryRun {
 		va.manifest = req.Manifest
@@ -357,12 +370,16 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, req.Manifest, "collaborators") {
+		return
+	}
 	action := "CREATE"
 	var existing map[string]any
 	acc, ok := s.accounts[name]
 	if ok {
 		action = "UPDATE"
 		existing = acc.manifest
+		carryOverLegacyGrant(existing, req.Manifest, "collaborators")
 	} else {
 		acc = &account{id: "pa-" + strconv.Itoa(s.nextID)}
 		s.nextID++
@@ -405,6 +422,9 @@ func (s *Server) applyMcpServer(w http.ResponseWriter, typ, name string, manifes
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, manifest, "collaborators") {
+		return
+	}
 	if msg := s.validateMcpServerManifest(typ, manifest); msg != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": msg})
 		return
@@ -416,6 +436,7 @@ func (s *Server) applyMcpServer(w http.ResponseWriter, typ, name string, manifes
 	if ok {
 		action = "UPDATE"
 		existing = srv.manifest
+		carryOverLegacyGrant(existing, manifest, "collaborators")
 	} else {
 		srv = &mcpServer{id: "mcp-" + strconv.Itoa(s.nextID)}
 		s.nextID++
@@ -487,9 +508,6 @@ func mcpManifestSchemaName(typ string) string {
 func (s *Server) validateMcpServerManifest(typ string, manifest map[string]any) string {
 	if desc, _ := manifest["description"].(string); desc == "" {
 		return "description is required"
-	}
-	if _, ok := manifest["collaborators"].([]any); !ok {
-		return "collaborators are required"
 	}
 
 	validateHeaders := func(auth map[string]any) string {
@@ -696,6 +714,9 @@ func (s *Server) handleApplyAgent(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, req.Manifest, "collaborators") {
+		return
+	}
 	if msg := s.validateAgentManifest(typ, req.Manifest); msg != "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": msg})
 		return
@@ -710,6 +731,7 @@ func (s *Server) handleApplyAgent(w http.ResponseWriter, r *http.Request) {
 		a = &agent{id: "agent-" + strconv.Itoa(s.nextID)}
 		s.nextID++
 	}
+	carryOverLegacyGrant(a.manifest, req.Manifest, "collaborators")
 	version := a.latestVersion + 1
 	if !req.DryRun {
 		a.latestVersion = version
@@ -726,9 +748,6 @@ func (s *Server) handleApplyAgent(w http.ResponseWriter, r *http.Request) {
 func (s *Server) validateAgentManifest(typ string, manifest map[string]any) string {
 	if desc, _ := manifest["description"].(string); desc == "" {
 		return "description is required"
-	}
-	if _, ok := manifest["collaborators"].([]any); !ok {
-		return "collaborators are required"
 	}
 	switch typ {
 	case "truefoundry-agent":

@@ -144,7 +144,7 @@ type AgentManifest struct {
 	AuthData  *AgentServerAuth `json:"auth_data,omitempty"`
 	Framework *AgentFramework  `json:"framework,omitempty"`
 
-	Collaborators []Collaborator    `json:"collaborators"`
+	Collaborators *[]Collaborator   `json:"collaborators,omitempty"`
 	Tags          map[string]string `json:"tags,omitempty"`
 }
 

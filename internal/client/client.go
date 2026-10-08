@@ -243,6 +243,13 @@ type ModelIntegration struct {
 }
 
 // Collaborator grants a role on the surrounding resource to a subject.
+//
+// Collaborators are deprecated since control plane v0.172.0 in favour of
+// standalone role-binding manifests (see role_bindings.go), and rejected after
+// 15 Nov 2026. Every manifest therefore carries them as *[]Collaborator with
+// omitempty, because the three wire states mean different things during the
+// transition: an omitted field leaves the existing grants untouched, an empty
+// list clears them, a non-empty list replaces them.
 type Collaborator struct {
 	Subject string `json:"subject"`
 	RoleID  string `json:"role_id"`
@@ -265,7 +272,7 @@ type ProviderAccountManifest struct {
 	RoutingType    string             `json:"routing_type,omitempty"`
 	Slug           string             `json:"slug,omitempty"`
 	SubscriptionID string             `json:"subscription_id,omitempty"`
-	Collaborators  []Collaborator     `json:"collaborators,omitempty"`
+	Collaborators  *[]Collaborator    `json:"collaborators,omitempty"`
 	Integrations   []ModelIntegration `json:"integrations"`
 }
 

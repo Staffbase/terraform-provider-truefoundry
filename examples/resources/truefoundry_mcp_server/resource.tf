@@ -22,13 +22,6 @@ resource "truefoundry_mcp_server" "deepwiki" {
       }
     },
   ]
-
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "mcp-server-user"
-    },
-  ]
 }
 
 # A remote MCP server behind an OAuth2 (OIDC) identity provider; each

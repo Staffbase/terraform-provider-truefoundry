@@ -70,13 +70,6 @@ resource "truefoundry_agent" "support_triage" {
     }
   }
 
-  collaborators = [
-    {
-      subject = "team:everyone"
-      role_id = "agent-access"
-    },
-  ]
-
   tags = {
     team = "support"
   }
@@ -94,7 +87,7 @@ resource "truefoundry_agent" "support_triage" {
 
 ### Optional
 
-- `collaborators` (Attributes Set) Subjects with a role on this agent. (see [below for nested schema](#nestedatt--collaborators))
+- `collaborators` (Attributes Set, Deprecated) Subjects with a role on this agent; use `truefoundry_role_binding` instead. Unset leaves the grants on the control plane untouched (and they are not tracked); an empty set clears them, which is only accepted until 15 Nov 2026. (see [below for nested schema](#nestedatt--collaborators))
 - `config` (Attributes) Runtime configuration of the agent. (see [below for nested schema](#nestedatt--config))
 - `instructions` (String) System instructions for the agent. May reference variables as {{name}}.
 - `mcp_servers` (Attributes List) Gateway MCP servers the agent may use, referenced by name. They must exist on the same tenant. (see [below for nested schema](#nestedatt--mcp_servers))

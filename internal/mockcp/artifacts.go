@@ -142,10 +142,6 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": fmt.Sprintf("Validation Error: MlRepoManifest /name: must match pattern %q", mlRepoNameRe.String())})
 		return
 	}
-	if _, ok := req["collaborators"].([]any); !ok {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: MlRepoManifest : must have required property 'collaborators'"})
-		return
-	}
 	storageFQN, _ := req["storage_integration_fqn"].(string)
 	if storageFQN == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "Validation Error: MlRepoManifest : must have required property 'storage_integration_fqn'"})
@@ -154,6 +150,9 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.writeLegacyGrantError(w, req, "collaborators") {
+		return
+	}
 	if !s.blobStorageIntegrationExists(storageFQN) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": fmt.Sprintf("Blob storage integration %q not found", storageFQN)})
 		return
@@ -164,6 +163,7 @@ func (s *Server) handleApplyMlRepo(w http.ResponseWriter, r *http.Request) {
 		s.nextID++
 		s.mlrepos[name] = repo
 	}
+	carryOverLegacyGrant(repo.manifest, req, "collaborators")
 	repo.manifest = req
 	writeJSON(w, http.StatusOK, map[string]any{"data": mlRepoJSON(name, repo)})
 }

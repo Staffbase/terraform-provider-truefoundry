@@ -115,22 +115,7 @@ func (r *virtualMcpServerResource) Schema(_ context.Context, _ resource.SchemaRe
 					},
 				},
 			},
-			"collaborators": schema.SetNestedAttribute{
-				Optional:    true,
-				Description: "Subjects with a role on this virtual MCP server.",
-				NestedObject: schema.NestedAttributeObject{
-					Attributes: map[string]schema.Attribute{
-						"subject": schema.StringAttribute{
-							Required:    true,
-							Description: "Subject FQN, e.g. user:jane@example.com or team:everyone.",
-						},
-						"role_id": schema.StringAttribute{
-							Required:    true,
-							Description: "Role to assign, e.g. mcp-server-user or mcp-server-manager.",
-						},
-					},
-				},
-			},
+			"collaborators": collaboratorsAttribute("virtual MCP server", "mcp-server-user or mcp-server-manager"),
 			"tags": schema.MapAttribute{
 				Optional:    true,
 				ElementType: types.StringType,
@@ -171,6 +156,7 @@ func (r *virtualMcpServerResource) Read(ctx context.Context, req resource.ReadRe
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	imported := consumeImportMark(ctx, req, resp)
 
 	server, found, err := getMcpServer(ctx, r.client, state.FQN.ValueString())
 	if err != nil {
@@ -221,13 +207,7 @@ func (r *virtualMcpServerResource) Read(ctx context.Context, req resource.ReadRe
 	}
 	state.Servers = servers
 
-	state.Collaborators = nil
-	for _, c := range server.Manifest.Collaborators {
-		state.Collaborators = append(state.Collaborators, collaboratorModel{
-			Subject: types.StringValue(c.Subject),
-			RoleID:  types.StringValue(c.RoleID),
-		})
-	}
+	state.Collaborators = refreshCollaborators(state.Collaborators, server.Manifest.Collaborators, imported)
 	state.Tags = stringMapToModel(server.Manifest.Tags)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
@@ -261,6 +241,7 @@ func (r *virtualMcpServerResource) Delete(ctx context.Context, req resource.Dele
 // ImportState imports a virtual MCP server by its FQN, e.g. "my-tenant:mcp-server:my-server".
 func (r *virtualMcpServerResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	resource.ImportStatePassthroughID(ctx, path.Root("fqn"), req, resp)
+	markImported(ctx, resp)
 }
 
 // apply sends the manifest and resolves ID and FQN. The apply response for
@@ -294,7 +275,7 @@ func virtualMcpServerManifestFromModel(m *virtualMcpServerModel) client.McpServe
 		Type:          "mcp-server/virtual",
 		Name:          m.Name.ValueString(),
 		Description:   m.Description.ValueString(),
-		Collaborators: []client.Collaborator{},
+		Collaborators: collaboratorsToManifest(m.Collaborators),
 	}
 	for _, s := range m.Servers {
 		source := client.McpServerSource{Name: s.Name.ValueString()}
@@ -305,12 +286,6 @@ func virtualMcpServerManifestFromModel(m *virtualMcpServerModel) client.McpServe
 			source.AuthData = &client.McpServerHeaderOverride{Type: "header", Headers: headers}
 		}
 		manifest.Servers = append(manifest.Servers, source)
-	}
-	for _, c := range m.Collaborators {
-		manifest.Collaborators = append(manifest.Collaborators, client.Collaborator{
-			Subject: c.Subject.ValueString(),
-			RoleID:  c.RoleID.ValueString(),
-		})
 	}
 	manifest.Tags = stringMapFromModel(m.Tags)
 	return manifest

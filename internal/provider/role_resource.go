@@ -100,7 +100,7 @@ func (r *roleResource) Metadata(_ context.Context, req resource.MetadataRequest,
 func (r *roleResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Manages a custom TrueFoundry role (`role` manifest) — a named set of permissions that " +
-			"`role_id` references such as a `truefoundry_ml_repo` collaborator resolve against. " +
+			"`truefoundry_role_binding` permissions resolve against via their `role`. " +
 			"Only roles scoped to the whole tenant or to a team can be user-defined; the control plane reserves " +
 			"every other scope.\n\n" +
 			"Roles TrueFoundry provides itself come in two flavours. Reserved roles (`is_editable = false`) cannot " +

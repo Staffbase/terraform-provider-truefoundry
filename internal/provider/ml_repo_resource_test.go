@@ -65,7 +65,8 @@ func TestAccMlRepo_lifecycle(t *testing.T) {
 					}),
 				),
 			},
-			// In-place update: change the description, drop the collaborators.
+			// In-place update: change the description, drop the collaborators
+			// (which leaves the grant on the control plane, untracked).
 			{
 				Config: providerConfig(host) + mlRepoStorageConfig + `
 resource "truefoundry_ml_repo" "artifacts" {
