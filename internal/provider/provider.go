@@ -124,6 +124,7 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newRoleBindingResource,
 		newSecretGroupResource,
 		newSecretResource,
+		newGatewayInstallationResource,
 		newMcpServerResource,
 		newOpenapiMcpServerResource,
 		newVirtualMcpServerResource,

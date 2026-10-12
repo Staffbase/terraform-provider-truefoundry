@@ -158,7 +158,7 @@ The field mapping and a rollout order are in the
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
 are imported by their FQN, agents, ML repos, agent skills, prompts, roles, role
-bindings, and secret groups by their name, secrets by their FQN, virtual accounts by their ID, and gateway configs
+bindings, secret groups, and gateway installations by their name, secrets by their FQN, virtual accounts by their ID, and gateway configs
 (tenant-wide singletons) by fixed string IDs:
 
 ```sh
@@ -170,6 +170,7 @@ terraform import truefoundry_hashicorp_account.secrets my-tenant:hashicorp:vault
 terraform import truefoundry_system_secret_store.system my-tenant:truefoundry:system-secret-store
 terraform import truefoundry_secret_group.secrets system
 terraform import truefoundry_secret.vault_role_id my-tenant:system:vault-role-id
+terraform import truefoundry_gateway_installation.eu eu
 terraform import truefoundry_guardrail_group.region my-tenant:guardrail-config-group:my-group
 terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
 terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs
@@ -244,6 +245,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_role_binding`](docs/resources/role_binding.md),
 [`truefoundry_secret_group`](docs/resources/secret_group.md),
 [`truefoundry_secret`](docs/resources/secret.md),
+[`truefoundry_gateway_installation`](docs/resources/gateway_installation.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 

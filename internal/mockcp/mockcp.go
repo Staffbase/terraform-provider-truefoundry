@@ -25,21 +25,22 @@ const Tenant = "mock-tenant"
 type Server struct {
 	apiKey string
 
-	mu           sync.Mutex
-	accounts     map[string]*account        // keyed by manifest name
-	vaccounts    map[string]*virtualAccount // keyed by manifest name
-	gwconfigs    map[string]*gatewayConfig  // keyed by manifest type, e.g. "gateway-budget-config"
-	budgets      map[string]*budgetV2       // v2 budget rules, keyed by manifest name
-	mcpservers   map[string]*mcpServer      // keyed by manifest name
-	secretgroups map[string]*secretGroup    // keyed by manifest name
-	roles        map[string]*role           // keyed by manifest name
-	agents       map[string]*agent          // keyed by manifest name
-	mlrepos      map[string]*mlRepo         // keyed by manifest name
-	skills       map[string]*artifactSeries // keyed by manifest name
-	prompts      map[string]*artifactSeries // keyed by manifest name
-	roleBindings map[string]*roleBinding    // keyed by manifest name
-	nextID       int
-	tokenReads   int // count of GET .../virtual-accounts/{id}/token requests
+	mu            sync.Mutex
+	accounts      map[string]*account             // keyed by manifest name
+	vaccounts     map[string]*virtualAccount      // keyed by manifest name
+	gwconfigs     map[string]*gatewayConfig       // keyed by manifest type, e.g. "gateway-budget-config"
+	budgets       map[string]*budgetV2            // v2 budget rules, keyed by manifest name
+	mcpservers    map[string]*mcpServer           // keyed by manifest name
+	secretgroups  map[string]*secretGroup         // keyed by manifest name
+	roles         map[string]*role                // keyed by manifest name
+	agents        map[string]*agent               // keyed by manifest name
+	mlrepos       map[string]*mlRepo              // keyed by manifest name
+	skills        map[string]*artifactSeries      // keyed by manifest name
+	prompts       map[string]*artifactSeries      // keyed by manifest name
+	roleBindings  map[string]*roleBinding         // keyed by manifest name
+	installations map[string]*gatewayInstallation // keyed by manifest name
+	nextID        int
+	tokenReads    int // count of GET .../virtual-accounts/{id}/token requests
 
 	secretValuesHidden  bool // see HideSecretValues
 	legacyGrantsRetired bool // see RetireLegacyGrants
@@ -74,7 +75,7 @@ type agent struct {
 
 // New returns a mock control plane that requires the given bearer API key.
 func New(apiKey string) *Server {
-	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, secretgroups: map[string]*secretGroup{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, roleBindings: map[string]*roleBinding{}, nextID: 1}
+	s := &Server{apiKey: apiKey, accounts: map[string]*account{}, vaccounts: map[string]*virtualAccount{}, gwconfigs: map[string]*gatewayConfig{}, budgets: map[string]*budgetV2{}, mcpservers: map[string]*mcpServer{}, secretgroups: map[string]*secretGroup{}, roles: map[string]*role{}, agents: map[string]*agent{}, mlrepos: map[string]*mlRepo{}, skills: map[string]*artifactSeries{}, prompts: map[string]*artifactSeries{}, roleBindings: map[string]*roleBinding{}, installations: map[string]*gatewayInstallation{}, nextID: 1}
 	s.seedBuiltinRoles()
 	return s
 }
@@ -91,6 +92,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/svc/v1/secret-groups/{id}", s.auth(s.handleUpdateSecretGroup))
 	mux.HandleFunc("GET /api/svc/v1/secrets/{id}", s.auth(s.handleGetSecret))
 	mux.HandleFunc("DELETE /api/svc/v1/secrets/{id}", s.auth(s.handleDeleteSecret))
+	mux.HandleFunc("GET /api/svc/v1/llm-gateway/installations", s.auth(s.handleListGatewayInstallations))
+	mux.HandleFunc("GET /api/svc/v1/llm-gateway/installations/token", s.auth(s.handleGatewayInstallationToken))
+	mux.HandleFunc("GET /api/svc/v1/llm-gateway/installations/{id}", s.auth(s.handleGetGatewayInstallation))
+	mux.HandleFunc("DELETE /api/svc/v1/llm-gateway/installations/{id}", s.auth(s.handleDeleteGatewayInstallation))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/config/{type}", s.auth(s.handleGetGatewayConfig))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/budgets", s.auth(s.handleListBudgets))
 	mux.HandleFunc("GET /api/svc/v1/role", s.auth(s.handleListRoles))
@@ -358,6 +363,10 @@ func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
 	}
 	if isSecretGroupType(typ) {
 		s.applySecretGroup(w, typ, name, req.Manifest, req.DryRun)
+		return
+	}
+	if isGatewayInstallationType(typ) {
+		s.applyGatewayInstallation(w, name, req.Manifest, req.DryRun)
 		return
 	}
 	if !strings.HasPrefix(typ, "provider-account/") {
@@ -1559,6 +1568,10 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 	name, _ := req.Manifest["name"].(string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if typ, _ := req.Manifest["type"].(string); isGatewayInstallationType(typ) {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"statusCode": http.StatusBadRequest, "message": "Unsupported resource type: gateway-installation"})
+		return
+	}
 	if typ, _ := req.Manifest["type"].(string); isGatewayConfigType(typ) {
 		if _, ok := s.gwconfigs[typ]; !ok {
 			writeJSON(w, http.StatusNotFound, map[string]string{"message": "gateway config not found"})
