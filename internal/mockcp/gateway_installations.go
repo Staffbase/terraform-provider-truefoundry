@@ -99,8 +99,11 @@ func (s *Server) applyGatewayInstallation(w http.ResponseWriter, name string, ma
 
 	g, ok := s.installations[name]
 	if !ok {
+		// A dry run previews the next ID without consuming it.
 		g = &gatewayInstallation{id: "gwi-" + strconv.Itoa(s.nextID)}
-		s.nextID++
+		if !dryRun {
+			s.nextID++
+		}
 	}
 	entry := gatewayInstallationEntry(name, &gatewayInstallation{id: g.id, manifest: manifest})
 	if !dryRun {

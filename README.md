@@ -170,7 +170,7 @@ terraform import truefoundry_hashicorp_account.secrets my-tenant:hashicorp:vault
 terraform import truefoundry_system_secret_store.system my-tenant:truefoundry:system-secret-store
 terraform import truefoundry_secret_group.secrets system
 terraform import truefoundry_secret.vault_role_id my-tenant:system:vault-role-id
-terraform import truefoundry_gateway_installation.eu eu
+terraform import truefoundry_gateway_installation.gateway_eu gateway-eu
 terraform import truefoundry_guardrail_group.region my-tenant:guardrail-config-group:my-group
 terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
 terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs

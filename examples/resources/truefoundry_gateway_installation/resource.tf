@@ -1,7 +1,7 @@
 # A self-hosted gateway plane, registered on the control plane with the URL it
 # serves.
-resource "truefoundry_gateway_installation" "eu" {
-  name = "eu"
+resource "truefoundry_gateway_installation" "gateway_eu" {
+  name = "gateway-eu"
   url  = "https://gateway.example.com"
 }
 
@@ -9,8 +9,8 @@ resource "truefoundry_gateway_installation" "eu" {
 # through a secret store rather than reading it from the state.
 resource "vault_kv_secret_v2" "gateway_token" {
   mount = "secret"
-  name  = "tfy-llm-gateway/eu"
+  name  = "tfy-llm-gateway/gateway-eu"
   data_json = jsonencode({
-    TFY_API_KEY = truefoundry_gateway_installation.eu.token
+    TFY_API_KEY = truefoundry_gateway_installation.gateway_eu.token
   })
 }

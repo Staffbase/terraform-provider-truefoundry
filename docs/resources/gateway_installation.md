@@ -21,8 +21,8 @@ Import an existing installation by its name: `terraform import truefoundry_gatew
 ```terraform
 # A self-hosted gateway plane, registered on the control plane with the URL it
 # serves.
-resource "truefoundry_gateway_installation" "eu" {
-  name = "eu"
+resource "truefoundry_gateway_installation" "gateway_eu" {
+  name = "gateway-eu"
   url  = "https://gateway.example.com"
 }
 
@@ -30,9 +30,9 @@ resource "truefoundry_gateway_installation" "eu" {
 # through a secret store rather than reading it from the state.
 resource "vault_kv_secret_v2" "gateway_token" {
   mount = "secret"
-  name  = "tfy-llm-gateway/eu"
+  name  = "tfy-llm-gateway/gateway-eu"
   data_json = jsonencode({
-    TFY_API_KEY = truefoundry_gateway_installation.eu.token
+    TFY_API_KEY = truefoundry_gateway_installation.gateway_eu.token
   })
 }
 ```
@@ -64,5 +64,5 @@ The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/c
 ```shell
 # Gateway installations are imported by their name. The token cannot be read
 # back, so an imported installation has none; replace it to mint one.
-terraform import truefoundry_gateway_installation.eu eu
+terraform import truefoundry_gateway_installation.gateway_eu gateway-eu
 ```
