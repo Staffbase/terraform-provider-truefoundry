@@ -107,7 +107,8 @@ documentation page.
   `truefoundry_hashicorp_account` (Vault) and
   `truefoundry_system_secret_store` (control-plane database), and the groups
   the secrets live in with `truefoundry_secret_group` — store, then group,
-  then the secret itself created out of band, then a `tfy-secret://` reference
+  then the secret itself (out of band, or with `truefoundry_secret` when
+  Terraform already holds the value), then a `tfy-secret://` reference
   in `api_key`.
 - **Give CI/CD its own virtual account.** Run Terraform with a
   `truefoundry_virtual_account` token whose role bindings cover only the
@@ -157,7 +158,7 @@ The field mapping and a rollout order are in the
 Provider accounts, custom endpoint accounts, Azure accounts, Slack accounts,
 HashiCorp accounts, system secret stores, guardrail groups, and MCP servers
 are imported by their FQN, agents, ML repos, agent skills, prompts, roles, role
-bindings, and secret groups by their name, virtual accounts by their ID, and gateway configs
+bindings, and secret groups by their name, secrets by their FQN, virtual accounts by their ID, and gateway configs
 (tenant-wide singletons) by fixed string IDs:
 
 ```sh
@@ -168,6 +169,7 @@ terraform import truefoundry_slack_account.notifications my-tenant:slack:slack-w
 terraform import truefoundry_hashicorp_account.secrets my-tenant:hashicorp:vault-secrets
 terraform import truefoundry_system_secret_store.system my-tenant:truefoundry:system-secret-store
 terraform import truefoundry_secret_group.secrets system
+terraform import truefoundry_secret.vault_role_id my-tenant:system:vault-role-id
 terraform import truefoundry_guardrail_group.region my-tenant:guardrail-config-group:my-group
 terraform import truefoundry_mcp_server.deepwiki my-tenant:mcp-server:deepwiki
 terraform import truefoundry_virtual_mcp_server.docs my-tenant:mcp-server:docs
@@ -241,6 +243,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_role`](docs/resources/role.md),
 [`truefoundry_role_binding`](docs/resources/role_binding.md),
 [`truefoundry_secret_group`](docs/resources/secret_group.md),
+[`truefoundry_secret`](docs/resources/secret.md),
 [`truefoundry_virtual_account`](docs/resources/virtual_account.md),
 [`truefoundry_models`](docs/data-sources/models.md).
 
@@ -338,12 +341,18 @@ make docs-check  # validate
   `permissions` are not tracked once removed from the configuration, and a
   control plane response without them keeps the last known value, so grants
   removed entirely outside Terraform are not reported as drift.
-- Secret groups (`truefoundry_secret_group`): the group is managed, the
-  secrets in it are not — create and rotate secret values out of band, which
-  is what keeps secret material out of the Terraform state. **Destroying or
-  renaming a group deletes every secret it holds** and Terraform cannot
-  recreate them, so guard live groups with `prevent_destroy`. The group's
-  `associated_secrets` and `owned_by` are not modeled.
+- Secret groups (`truefoundry_secret_group`): the group resource manages only
+  the group. Its secrets are created out of band — which keeps secret material
+  out of the Terraform state — or with `truefoundry_secret`, which stores the
+  value in the state. **Destroying or renaming a group deletes every secret it
+  holds** and Terraform cannot recreate out-of-band secrets, so guard live
+  groups with `prevent_destroy`. The group's `associated_secrets` and
+  `owned_by` are not modeled.
+- Secrets (`truefoundry_secret`): the control plane replaces a group's whole
+  secret list on every write, so the provider serializes writes per group
+  within one run; a parallel write from outside Terraform can still race. A
+  control plane with `DISABLE_SECRET_VALUE_VIEW` hides values, which leaves
+  out-of-band value changes undetected.
 - Virtual accounts: auto-rotation, notification targets, ownership, and identity
   provider mappings are not modeled (same caveat as above for pre-existing
   accounts). The account token is stored in the Terraform state; prefer

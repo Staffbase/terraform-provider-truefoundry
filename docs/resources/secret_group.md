@@ -4,7 +4,7 @@ page_title: "truefoundry_secret_group Resource - TrueFoundry"
 subcategory: ""
 description: |-
   Manages a TrueFoundry secret group (secret-group manifest) — the named bucket that individual secrets live in, backed by a secret store such as a truefoundry_system_secret_store or a truefoundry_hashicorp_account. Secrets in the group are referenced as tfy-secret://… from every credential attribute this provider exposes.
-  Only the group is managed, not the secrets in it. Secret values are created and rotated out of band, which keeps secret material out of the Terraform state — and means Terraform cannot recreate them. Destroying or renaming a group deletes every secret it holds, so put lifecycle { prevent_destroy = true } on groups backing live credentials.
+  The group resource manages only the group. Secrets in it are created either with truefoundry_secret (the value is then stored in the Terraform state) or out of band, which keeps secret material out of the state — and means Terraform cannot recreate them. Destroying or renaming a group deletes every secret it holds, so put lifecycle { prevent_destroy = true } on groups backing live credentials.
   Import an existing group by its name: terraform import truefoundry_secret_group.example system.
 ---
 
@@ -12,7 +12,7 @@ description: |-
 
 Manages a TrueFoundry secret group (`secret-group` manifest) — the named bucket that individual secrets live in, backed by a secret store such as a `truefoundry_system_secret_store` or a `truefoundry_hashicorp_account`. Secrets in the group are referenced as `tfy-secret://…` from every credential attribute this provider exposes.
 
-**Only the group is managed, not the secrets in it.** Secret values are created and rotated out of band, which keeps secret material out of the Terraform state — and means Terraform cannot recreate them. **Destroying or renaming a group deletes every secret it holds**, so put `lifecycle { prevent_destroy = true }` on groups backing live credentials.
+**The group resource manages only the group.** Secrets in it are created either with `truefoundry_secret` (the value is then stored in the Terraform state) or out of band, which keeps secret material out of the state — and means Terraform cannot recreate them. **Destroying or renaming a group deletes every secret it holds**, so put `lifecycle { prevent_destroy = true }` on groups backing live credentials.
 
 Import an existing group by its name: `terraform import truefoundry_secret_group.example system`.
 
@@ -29,9 +29,9 @@ resource "truefoundry_system_secret_store" "system" {
   ]
 }
 
-# The group itself. Secrets inside it are created out of band — through the
-# TrueFoundry UI or API — which keeps secret material out of the Terraform
-# state. Terraform manages who can reach the group, not what is in it.
+# The group itself. Secrets inside it are created with truefoundry_secret
+# (the value is then stored in the Terraform state) or out of band — through
+# the TrueFoundry UI or API — which keeps secret material out of the state.
 resource "truefoundry_secret_group" "system" {
   name            = "system"
   integration_fqn = "${truefoundry_system_secret_store.system.fqn}:secret-store:system-secret-store"

@@ -63,9 +63,10 @@ func (r *secretGroupResource) Schema(_ context.Context, _ resource.SchemaRequest
 			"secrets live in, backed by a secret store such as a `truefoundry_system_secret_store` or a " +
 			"`truefoundry_hashicorp_account`. Secrets in the group are referenced as `tfy-secret://…` from every " +
 			"credential attribute this provider exposes.\n\n" +
-			"**Only the group is managed, not the secrets in it.** Secret values are created and rotated out of " +
-			"band, which keeps secret material out of the Terraform state — and means Terraform cannot recreate " +
-			"them. **Destroying or renaming a group deletes every secret it holds**, so put " +
+			"**The group resource manages only the group.** Secrets in it are created either with " +
+			"`truefoundry_secret` (the value is then stored in the Terraform state) or out of band, which keeps " +
+			"secret material out of the state — and means Terraform cannot recreate them. **Destroying or " +
+			"renaming a group deletes every secret it holds**, so put " +
 			"`lifecycle { prevent_destroy = true }` on groups backing live credentials.\n\n" +
 			"Import an existing group by its name: `terraform import truefoundry_secret_group.example system`.",
 		Attributes: map[string]schema.Attribute{

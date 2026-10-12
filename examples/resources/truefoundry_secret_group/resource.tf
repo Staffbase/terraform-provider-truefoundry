@@ -8,9 +8,9 @@ resource "truefoundry_system_secret_store" "system" {
   ]
 }
 
-# The group itself. Secrets inside it are created out of band — through the
-# TrueFoundry UI or API — which keeps secret material out of the Terraform
-# state. Terraform manages who can reach the group, not what is in it.
+# The group itself. Secrets inside it are created with truefoundry_secret
+# (the value is then stored in the Terraform state) or out of band — through
+# the TrueFoundry UI or API — which keeps secret material out of the state.
 resource "truefoundry_secret_group" "system" {
   name            = "system"
   integration_fqn = "${truefoundry_system_secret_store.system.fqn}:secret-store:system-secret-store"

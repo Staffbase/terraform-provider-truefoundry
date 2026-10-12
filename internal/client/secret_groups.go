@@ -9,9 +9,8 @@ import (
 
 // Secret groups ("secret-group" manifests) are the named buckets that
 // individual secrets live in, backed by a secret-store integration of a
-// truefoundry_system_secret_store or truefoundry_hashicorp_account. The
-// secrets themselves are created out of band; this package models only the
-// group.
+// truefoundry_system_secret_store or truefoundry_hashicorp_account. This file
+// models the group; the secrets in it are in secrets.go.
 //
 // The manifest is snake_case, but the read endpoint's envelope and entry
 // fields are camelCase — both shapes appear in this file.
@@ -29,8 +28,9 @@ type SecretGroupManifest struct {
 //
 // The entry also carries associatedSecrets — metadata about the secrets the
 // group holds (names, FQNs, version numbers; no values). It is deliberately
-// not modelled: leaving the field off the struct guarantees nothing about
-// the tenant's secrets can reach the Terraform state.
+// not modelled here: truefoundry_secret_group must not put the tenant's
+// secrets into the Terraform state. truefoundry_secret reads them through
+// ListSecrets instead.
 type SecretGroup struct {
 	ID            string              `json:"id"`
 	FQN           string              `json:"fqn"`
