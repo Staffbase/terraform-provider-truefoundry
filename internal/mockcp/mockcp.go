@@ -41,6 +41,7 @@ type Server struct {
 	nextID       int
 	tokenReads   int // count of GET .../virtual-accounts/{id}/token requests
 
+	secretValuesHidden  bool // see HideSecretValues
 	legacyGrantsRetired bool // see RetireLegacyGrants
 }
 
@@ -86,6 +87,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/svc/v1/provider-integrations", s.auth(s.handleListIntegrations))
 	mux.HandleFunc("GET /api/svc/v1/mcp-servers", s.auth(s.handleListMcpServers))
 	mux.HandleFunc("GET /api/svc/v1/secret-groups", s.auth(s.handleListSecretGroups))
+	mux.HandleFunc("GET /api/svc/v1/secret-groups/{id}", s.auth(s.handleGetSecretGroup))
+	mux.HandleFunc("PUT /api/svc/v1/secret-groups/{id}", s.auth(s.handleUpdateSecretGroup))
+	mux.HandleFunc("GET /api/svc/v1/secrets/{id}", s.auth(s.handleGetSecret))
+	mux.HandleFunc("DELETE /api/svc/v1/secrets/{id}", s.auth(s.handleDeleteSecret))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/config/{type}", s.auth(s.handleGetGatewayConfig))
 	mux.HandleFunc("GET /api/svc/v1/llm-gateway/budgets", s.auth(s.handleListBudgets))
 	mux.HandleFunc("GET /api/svc/v1/role", s.auth(s.handleListRoles))

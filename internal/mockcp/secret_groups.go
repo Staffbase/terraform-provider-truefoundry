@@ -9,11 +9,12 @@ import (
 	"strings"
 )
 
-// secretGroup is a stored secret group ("secret-group" manifest). The
-// secrets it holds are created out of band and are not modelled.
+// secretGroup is a stored secret group ("secret-group" manifest) with the
+// secrets it holds, keyed by secret key.
 type secretGroup struct {
 	id       string
 	manifest map[string]any
+	secrets  map[string]*secret
 }
 
 // secretGroupNameRe is the secret group name pattern, verified against a live
@@ -104,21 +105,10 @@ func (s *Server) handleListSecretGroups(w http.ResponseWriter, r *http.Request) 
 	s.mu.Lock()
 	items := []map[string]any{}
 	for name, g := range s.secretgroups {
-		fqn := secretGroupFQN(name)
-		if fqnFilter != "" && fqn != fqnFilter {
+		if fqnFilter != "" && secretGroupFQN(name) != fqnFilter {
 			continue
 		}
-		items = append(items, map[string]any{
-			"id":            g.id,
-			"fqn":           fqn,
-			"name":          name,
-			"tenantName":    Tenant,
-			"integrationId": "int-" + name,
-			"manifest":      g.manifest,
-			// The real endpoint also returns associatedSecrets here; the
-			// client deliberately does not model it.
-			"associatedSecrets": []any{},
-		})
+		items = append(items, secretGroupEntry(name, g))
 	}
 	s.mu.Unlock()
 

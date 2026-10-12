@@ -62,6 +62,10 @@ type Client struct {
 	listCache map[string]any
 	listEpoch int64
 	listGroup singleflight.Group
+
+	// secretGroupLocks holds one *sync.Mutex per secret group ID; see
+	// secretGroupLock in secrets.go.
+	secretGroupLocks sync.Map
 }
 
 // New returns a client for the control plane at baseURL authenticating with apiKey.
