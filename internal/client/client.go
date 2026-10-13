@@ -104,7 +104,7 @@ func IsNotFound(err error) bool {
 // uses AccessKeyID and SecretAccessKey; type "header" (custom endpoints) uses
 // Headers; type "connection-string" (Azure blob storage) uses
 // ConnectionString; types "slack-webhook"/"slack-bot" use WebhookURL/BotToken;
-// types "token"/"approle" (HashiCorp Vault) use Token / RoleID+SecretID.
+// types "token"/"approle" (HashiCorp Vault) use Token / RoleID+SecretID+RolePath.
 // Values may be raw secrets or TrueFoundry secret references.
 type APIKeyAuth struct {
 	Type             string            `json:"type"`
@@ -118,6 +118,7 @@ type APIKeyAuth struct {
 	Token            string            `json:"token,omitempty"`
 	RoleID           string            `json:"role_id,omitempty"`
 	SecretID         string            `json:"secret_id,omitempty"`
+	RolePath         string            `json:"role_path,omitempty"`
 }
 
 // CostValue is the pricing of a model cost metric. The wire format is

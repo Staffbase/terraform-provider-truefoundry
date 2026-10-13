@@ -131,6 +131,25 @@ func (s *Server) DeleteAccount(name string) {
 	delete(s.accounts, name)
 }
 
+// DropIntegrationAuthField removes field from the auth_data of every
+// integration of the named account out-of-band, simulating a manifest stored
+// without it (e.g. by an older client).
+func (s *Server) DropIntegrationAuthField(name, field string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[name]
+	if !ok {
+		return
+	}
+	integrations, _ := a.manifest["integrations"].([]any)
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if auth, ok := m["auth_data"].(map[string]any); ok {
+			delete(auth, field)
+		}
+	}
+}
+
 // VirtualAccountCount returns the number of stored virtual accounts.
 func (s *Server) VirtualAccountCount() int {
 	s.mu.Lock()
@@ -1871,6 +1890,11 @@ func validateManifest(typ string, manifest map[string]any) string {
 				secretID, _ := auth["secret_id"].(string)
 				if roleID == "" || secretID == "" {
 					return "auth_data type approle requires role_id and secret_id"
+				}
+				if rp, present := auth["role_path"]; present {
+					if s, ok := rp.(string); !ok || s == "" {
+						return "auth_data role_path must be a non-empty string"
+					}
 				}
 			default:
 				return "auth_data must be type token or approle"
