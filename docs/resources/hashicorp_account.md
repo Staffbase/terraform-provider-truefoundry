@@ -72,6 +72,10 @@ Required:
 - `role_id` (String) AppRole role ID. Accepts TrueFoundry secret references.
 - `secret_id` (String, Sensitive) AppRole secret ID. Accepts TrueFoundry secret references.
 
+Optional:
+
+- `role_path` (String) Path the AppRole auth method is mounted at in Vault. Defaults to `approle`. Always sent, so a store saved without it (e.g. by an earlier provider version) is detected as drift and fixed on apply.
+
 ## Import
 
 Import is supported using the following syntax:

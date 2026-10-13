@@ -50,8 +50,9 @@ func TestAccHashicorpAccount_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "fqn", mockcp.Tenant+":hashicorp:spike-vault-secrets"),
 					resource.TestCheckResourceAttr("truefoundry_hashicorp_account.secrets", "vaults.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
-						"name":            "vault",
-						"approle.role_id": "tfy-secret://tenant:system:vault-role-id",
+						"name":              "vault",
+						"approle.role_id":   "tfy-secret://tenant:system:vault-role-id",
+						"approle.role_path": "approle",
 					}),
 				),
 			},
@@ -96,6 +97,53 @@ resource "truefoundry_hashicorp_account" "secrets" {
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_hashicorp_account.secrets", "vaults.*.authorized_subjects.*", "team:everyone"),
 				),
+			},
+		},
+	})
+}
+
+// role_path defaults to "approle" and is always sent. A store saved without
+// it (as provider versions before role_path did) is detected as drift and
+// written on the next apply; a custom mount path round-trips.
+func TestAccHashicorpAccount_approleRolePath(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{Config: providerConfig(host) + hashicorpAccountConfig},
+			{
+				PreConfig: func() { mock.DropIntegrationAuthField("spike-vault-secrets", "role_path") },
+				Config:    providerConfig(host) + hashicorpAccountConfig,
+				Check: resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
+					"name":              "vault",
+					"approle.role_path": "approle",
+				}),
+			},
+			{
+				Config: providerConfig(host) + `
+resource "truefoundry_hashicorp_account" "secrets" {
+  name = "spike-vault-secrets"
+
+  vaults = [
+    {
+      name          = "vault"
+      vault_url     = "https://vault.staffbase.com"
+      kv_mount_path = "de1/dev"
+      root_path     = "tfy-control-plane"
+      approle = {
+        role_id   = "tfy-secret://tenant:system:vault-role-id"
+        secret_id = "tfy-secret://tenant:system:vault-secret-id"
+        role_path = "approle-tfy"
+      }
+    },
+  ]
+}
+`,
+				Check: resource.TestCheckTypeSetElemNestedAttrs("truefoundry_hashicorp_account.secrets", "vaults.*", map[string]string{
+					"name":              "vault",
+					"approle.role_path": "approle-tfy",
+				}),
 			},
 		},
 	})

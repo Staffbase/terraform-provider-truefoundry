@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -26,6 +27,10 @@ var (
 	_ resource.ResourceWithValidateConfig = (*hashicorpAccountResource)(nil)
 	_ resource.ResourceWithImportState    = (*hashicorpAccountResource)(nil)
 )
+
+// defaultAppRolePath is the mount path of Vault's AppRole auth method, and
+// TrueFoundry's documented default for an integration's role path.
+const defaultAppRolePath = "approle"
 
 func newHashicorpAccountResource() resource.Resource {
 	return &hashicorpAccountResource{}
@@ -58,6 +63,7 @@ type vaultModel struct {
 type vaultAppRoleModel struct {
 	RoleID   types.String `tfsdk:"role_id"`
 	SecretID types.String `tfsdk:"secret_id"`
+	RolePath types.String `tfsdk:"role_path"`
 }
 
 func (r *hashicorpAccountResource) Metadata(_ context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -135,6 +141,13 @@ func (r *hashicorpAccountResource) Schema(_ context.Context, _ resource.SchemaRe
 									Required:    true,
 									Sensitive:   true,
 									Description: "AppRole secret ID. Accepts TrueFoundry secret references.",
+								},
+								"role_path": schema.StringAttribute{
+									Optional: true,
+									Computed: true,
+									Default:  stringdefault.StaticString(defaultAppRolePath),
+									Description: "Path the AppRole auth method is mounted at in Vault. Defaults to `" + defaultAppRolePath + "`. " +
+										"Always sent, so a store saved without it (e.g. by an earlier provider version) is detected as drift and fixed on apply.",
 								},
 							},
 						},
@@ -327,6 +340,7 @@ func hashicorpManifestFromModel(m *hashicorpAccountModel) client.HashicorpAccoun
 				Type:     "approle",
 				RoleID:   v.AppRole.RoleID.ValueString(),
 				SecretID: v.AppRole.SecretID.ValueString(),
+				RolePath: v.AppRole.RolePath.ValueString(),
 			}
 		} else {
 			integration.AuthData = &client.APIKeyAuth{Type: "token", Token: v.Token.ValueString()}
@@ -351,6 +365,9 @@ func vaultToModel(manifest client.VaultIntegration) vaultModel {
 			v.AppRole = &vaultAppRoleModel{
 				RoleID:   types.StringValue(auth.RoleID),
 				SecretID: types.StringValue(auth.SecretID),
+				// Left null when the control plane has none stored, so the
+				// planned default shows up as drift and gets written.
+				RolePath: stringOrNull(auth.RolePath),
 			}
 		default:
 			v.Token = stringOrNull(auth.Token)
