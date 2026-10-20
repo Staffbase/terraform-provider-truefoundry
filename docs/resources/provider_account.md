@@ -150,10 +150,12 @@ resource "truefoundry_provider_account" "virtual" {
 ### Optional
 
 - `access_key_id` (String, Sensitive) AWS access key ID (`aws-bedrock` only; alternative to `api_key`). Accepts a TrueFoundry secret reference (recommended).
-- `api_key` (String, Sensitive) API key used by the gateway to authenticate against the model provider. Required for `openai` and `azure-openai`; for `aws-bedrock` it is an alternative to access keys; must be unset for `azure-foundry` (auth is per model there) and `virtual-model`. Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state); the control plane returns the value as stored, so drift is detected.
+- `api_key` (String, Sensitive) API key used by the gateway to authenticate against the model provider. Required for `openai`, `azure-openai` and `microsoft-foundry`; for `aws-bedrock` it is an alternative to access keys; must be unset for `azure-foundry` (auth is per model there) and `virtual-model`. Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state); the control plane returns the value as stored, so drift is detected.
 - `azure_endpoint` (String) Azure OpenAI Service endpoint URL, e.g. https://{resource-name}.openai.azure.com. Required for `azure-openai`.
 - `base_url` (String) Optional custom base URL for the model provider API (`openai` only).
-- `provider_type` (String) Model provider behind this account. One of: `openai`, `azure-openai`, `azure-foundry`, `virtual-model`, `aws-bedrock`.
+- `openai_endpoint` (String) Microsoft Foundry OpenAI endpoint URL, e.g. https://{resource-name}.openai.azure.com (`microsoft-foundry` only; at least one of `openai_endpoint` and `project_endpoint` is required).
+- `project_endpoint` (String) Microsoft Foundry project endpoint URL, e.g. https://{resource-name}.services.ai.azure.com/api/projects/{project} (`microsoft-foundry` only). Used for deployment discovery and provider-specific routes.
+- `provider_type` (String) Model provider behind this account. One of: `openai`, `azure-openai`, `azure-foundry`, `microsoft-foundry`, `virtual-model`, `aws-bedrock`.
 - `region` (String) AWS region of the Bedrock account, e.g. eu-central-1. Required for `aws-bedrock`.
 - `secret_access_key` (String, Sensitive) AWS secret access key (`aws-bedrock` only; required together with `access_key_id`). Accepts a TrueFoundry secret reference (recommended).
 
@@ -173,13 +175,14 @@ Required:
 Optional:
 
 - `api_key` (String) API key of the Azure AI Foundry deployment. Required for `azure-foundry` models, where auth is per model. Must be a TrueFoundry secret reference (`tfy-secret://...` or a `...:secret-store:...` FQN path) — raw keys are rejected: they would end up in the Terraform state, and per-model API keys are not treated as sensitive so that model diffs stay readable in plans.
-- `api_version` (String) Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry`.
+- `api_version` (String) Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry` and `microsoft-foundry`.
 - `authorized_subjects` (Set of String) Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. The control plane rejects `serviceaccount:` subjects here. Unset means account-level access.
 - `azure_endpoint` (String) Azure AI Foundry endpoint URL, e.g. https://{deployment}.{region}.models.ai.azure.com. Required for `azure-foundry` models.
 - `cost` (Attributes) Optional pricing of this model, used for gateway cost tracking. Token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. Volume-based pricing tiers are not supported. (see [below for nested schema](#nestedatt--models--cost))
-- `deployment_type` (String) Azure OpenAI deployment type. One of: `standard`, `datazone_us`, `datazone_eu`, `global` (`azure-openai` only).
-- `foundation_model` (String) Foundation model identifier behind the deployment, e.g. gpt-4o-2024-11-20 (`azure-openai` only).
+- `deployment_type` (String) Azure deployment type. One of: `standard`, `datazone_us`, `datazone_eu`, `global` (`azure-openai` and `microsoft-foundry` only).
+- `foundation_model` (String) Foundation model identifier behind the deployment, e.g. gpt-4o-2024-11-20 (`azure-openai` and `microsoft-foundry` only).
 - `model_id` (String) Provider model identifier or Azure deployment name, e.g. gpt-4o. Required for all provider types except `virtual-model`.
+- `publisher` (String) Publisher of the Microsoft Foundry deployment. One of: `OpenAI`, `Other`. Required for `microsoft-foundry` models.
 - `region` (String) Region of the deployment, e.g. francecentral (`azure-openai`) or a per-model AWS region override (`aws-bedrock`).
 - `routing` (Attributes) Routing strategy of a virtual model across target models. Required for `virtual-model` models. (see [below for nested schema](#nestedatt--models--routing))
 - `slug` (String) Unique identifier of a virtual model, usable in place of `<group>/<model>` (`virtual-model` only).

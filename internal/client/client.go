@@ -236,6 +236,9 @@ type ModelIntegration struct {
 	AuthData      *APIKeyAuth `json:"auth_data,omitempty"`
 	AzureEndpoint string      `json:"azure_endpoint,omitempty"`
 
+	// Microsoft Foundry ("integration/model/microsoft-foundry"): OpenAI or Other.
+	Publisher string `json:"publisher,omitempty"`
+
 	// Virtual models ("integration/model/virtual")
 	Slug          string         `json:"slug,omitempty"`
 	RoutingConfig *RoutingConfig `json:"routing_config,omitempty"`
@@ -263,22 +266,25 @@ type Collaborator struct {
 // ProviderAccountManifest is a gateway provider account, e.g. type
 // "provider-account/openai", carrying its model integrations. AzureEndpoint
 // applies to "provider-account/azure-openai", Region to
-// "provider-account/aws-bedrock", EndpointType/RoutingType/Slug to
+// "provider-account/aws-bedrock", OpenAIEndpoint/ProjectEndpoint to
+// "provider-account/microsoft-foundry", EndpointType/RoutingType/Slug to
 // "provider-account/custom-endpoint". SubscriptionID appears on embedded
 // "provider-account/azure" manifests (see azure.go).
 type ProviderAccountManifest struct {
-	Type           string             `json:"type"`
-	Name           string             `json:"name"`
-	AuthData       *APIKeyAuth        `json:"auth_data,omitempty"`
-	BaseURL        string             `json:"base_url,omitempty"`
-	AzureEndpoint  string             `json:"azure_endpoint,omitempty"`
-	Region         string             `json:"region,omitempty"`
-	EndpointType   string             `json:"endpoint_type,omitempty"`
-	RoutingType    string             `json:"routing_type,omitempty"`
-	Slug           string             `json:"slug,omitempty"`
-	SubscriptionID string             `json:"subscription_id,omitempty"`
-	Collaborators  *[]Collaborator    `json:"collaborators,omitempty"`
-	Integrations   []ModelIntegration `json:"integrations"`
+	Type            string             `json:"type"`
+	Name            string             `json:"name"`
+	AuthData        *APIKeyAuth        `json:"auth_data,omitempty"`
+	BaseURL         string             `json:"base_url,omitempty"`
+	AzureEndpoint   string             `json:"azure_endpoint,omitempty"`
+	OpenAIEndpoint  string             `json:"openai_endpoint,omitempty"`
+	ProjectEndpoint string             `json:"project_endpoint,omitempty"`
+	Region          string             `json:"region,omitempty"`
+	EndpointType    string             `json:"endpoint_type,omitempty"`
+	RoutingType     string             `json:"routing_type,omitempty"`
+	Slug            string             `json:"slug,omitempty"`
+	SubscriptionID  string             `json:"subscription_id,omitempty"`
+	Collaborators   *[]Collaborator    `json:"collaborators,omitempty"`
+	Integrations    []ModelIntegration `json:"integrations"`
 }
 
 // ApplyResponse is the result of PUT /api/svc/v1/apply.
