@@ -40,10 +40,11 @@ var routingTypeValues = []string{"weight-based-routing", "priority-based-routing
 var deploymentTypeValues = []string{"standard", "datazone_us", "datazone_eu", "global"}
 
 // modelTypeValues are the model types accepted by the TrueFoundry gateway.
+// "decision" (control plane 0.178.15) is not in the published SDK enum yet.
 var modelTypeValues = []string{
 	"chat", "completion", "embedding", "realtime", "rerank",
 	"audio_transcription", "audio_translation", "text_to_speech",
-	"moderation", "image", "responses", "ocr",
+	"moderation", "image", "responses", "ocr", "decision",
 }
 
 func newProviderAccountResource() resource.Resource {

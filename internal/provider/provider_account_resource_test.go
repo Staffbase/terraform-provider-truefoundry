@@ -110,11 +110,17 @@ resource "truefoundry_provider_account" "openai" {
       model_id    = "text-embedding-3-small"
       model_types = ["embedding"]
     },
+    {
+      name        = "gpt-6-luna"
+      model_id    = "gpt-6-luna"
+      model_types = ["decision"]
+    },
   ]
 }
 `,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.#", "2"),
+					resource.TestCheckResourceAttr("truefoundry_provider_account.openai", "models.#", "3"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.openai", "models.*.model_types.*", "decision"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.openai", "models.*", map[string]string{
 						"name":          "gpt-4o",
 						"model_id":      "gpt-4o",

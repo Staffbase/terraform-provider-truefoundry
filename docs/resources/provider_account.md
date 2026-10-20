@@ -24,6 +24,12 @@ resource "truefoundry_provider_account" "openai" {
       model_id    = "gpt-4o"
       model_types = ["chat", "responses"]
     },
+    {
+      # Decision models answer typed questions on /v1/decisions and bill input tokens only.
+      name        = "gpt-6-luna"
+      model_id    = "gpt-6-luna"
+      model_types = ["decision"]
+    },
   ]
 }
 
@@ -161,7 +167,7 @@ resource "truefoundry_provider_account" "virtual" {
 
 Required:
 
-- `model_types` (Set of String) Model capabilities. One or more of: `chat`, `completion`, `embedding`, `realtime`, `rerank`, `audio_transcription`, `audio_translation`, `text_to_speech`, `moderation`, `image`, `responses`, `ocr`.
+- `model_types` (Set of String) Model capabilities. One or more of: `chat`, `completion`, `embedding`, `realtime`, `rerank`, `audio_transcription`, `audio_translation`, `text_to_speech`, `moderation`, `image`, `responses`, `ocr`, `decision`.
 - `name` (String) Name identifying this model integration.
 
 Optional:
