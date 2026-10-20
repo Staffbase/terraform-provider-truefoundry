@@ -216,6 +216,15 @@ see README "Known limitations" before pointing a resource at pre-existing accoun
   `mockcp` reproduces the masking (`maskSlackWebhookURL`) so this stays
   regression-tested. `bot_token` was not probed and may have the same
   behavior — unverified.
+- **`decision` model type is ahead of the SDK**: added to `modelTypeValues`
+  from the control plane 0.178.15 changelog and the Decisions docs
+  (2026-10-20, DEVS-1678); the published SDK `ModelType` enum does not list it
+  yet. Verified on the dev control plane via `dryRun: true` apply
+  (2026-10-20): an openai model with `model_types: ["decision"]` is accepted,
+  while an unknown value is rejected, so the enum is enforced server-side.
+  Per the docs it applies to OpenAI, Microsoft Foundry (`azure-foundry`) and
+  virtual models; the provider does not restrict model types per provider
+  type, so unsupported combinations are left to the control plane.
 - **One `truefoundry_provider_account` resource, five provider types** (`openai`, `azure-openai`, `azure-foundry`, `aws-bedrock`, `virtual-model`) with different required-field combinations — notably azure-foundry has *per-model* auth/endpoints and no account-level auth. Account types whose integrations are not models get their own resource (`custom_endpoint_account`, `azure_account`, `slack_account`, `hashicorp_account`, `system_secret_store`) and are listed with their own `?type=` filter (`blob-storage`, `notification-channel`, `secret-store` — the latter shared by hashicorp and truefoundry accounts). In all resources the validation rules live in exactly two places: `ValidateConfig` in the resource (plan-time, attribute-level errors) and `validateManifest` in `mockcp` (mock server-side). Keep them in sync.
 - The control plane verifies integration credentials at apply time for some types (Azure blob storage connection strings, Vault token/AppRole) but not others (Slack webhooks/bots) — `dryRun: true` applies exercise this too.
 - `name` and `provider_type` are `RequiresReplace`; everything else updates in place via re-apply (apply is idempotent, `CREATE` vs `UPDATE`).

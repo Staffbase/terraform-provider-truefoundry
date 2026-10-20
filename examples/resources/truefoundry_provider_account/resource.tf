@@ -9,6 +9,12 @@ resource "truefoundry_provider_account" "openai" {
       model_id    = "gpt-4o"
       model_types = ["chat", "responses"]
     },
+    {
+      # Decision models answer typed questions on /v1/decisions and bill input tokens only.
+      name        = "gpt-6-luna"
+      model_id    = "gpt-6-luna"
+      model_types = ["decision"]
+    },
   ]
 }
 
