@@ -31,7 +31,10 @@ var (
 )
 
 // providerTypeValues are the supported provider account types.
-var providerTypeValues = []string{"openai", "azure-openai", "azure-foundry", "virtual-model", "aws-bedrock"}
+var providerTypeValues = []string{"openai", "azure-openai", "azure-foundry", "microsoft-foundry", "virtual-model", "aws-bedrock"}
+
+// publisherValues are the Microsoft Foundry model publishers.
+var publisherValues = []string{"OpenAI", "Other"}
 
 // routingTypeValues are the supported virtual model routing strategies.
 var routingTypeValues = []string{"weight-based-routing", "priority-based-routing"}
@@ -65,6 +68,8 @@ type providerAccountModel struct {
 	APIKey          types.String `tfsdk:"api_key"`
 	BaseURL         types.String `tfsdk:"base_url"`
 	AzureEndpoint   types.String `tfsdk:"azure_endpoint"`
+	OpenAIEndpoint  types.String `tfsdk:"openai_endpoint"`
+	ProjectEndpoint types.String `tfsdk:"project_endpoint"`
 	Region          types.String `tfsdk:"region"`
 	AccessKeyID     types.String `tfsdk:"access_key_id"`
 	SecretAccessKey types.String `tfsdk:"secret_access_key"`
@@ -88,6 +93,9 @@ type modelModel struct {
 	// Azure Foundry (api_version applies here too)
 	APIKey        types.String `tfsdk:"api_key"`
 	AzureEndpoint types.String `tfsdk:"azure_endpoint"`
+
+	// Microsoft Foundry
+	Publisher types.String `tfsdk:"publisher"`
 
 	// Virtual models
 	Slug    types.String  `tfsdk:"slug"`
@@ -151,7 +159,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 				Optional:  true,
 				Sensitive: true,
 				Description: "API key used by the gateway to authenticate against the model provider. " +
-					"Required for `openai` and `azure-openai`; for `aws-bedrock` it is an alternative to access keys; " +
+					"Required for `openai`, `azure-openai` and `microsoft-foundry`; for `aws-bedrock` it is an alternative to access keys; " +
 					"must be unset for `azure-foundry` (auth is per model there) and `virtual-model`. " +
 					"Accepts a TrueFoundry secret reference (recommended — keeps secret material out of the Terraform state); " +
 					"the control plane returns the value as stored, so drift is detected.",
@@ -163,6 +171,15 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 			"azure_endpoint": schema.StringAttribute{
 				Optional:    true,
 				Description: "Azure OpenAI Service endpoint URL, e.g. https://{resource-name}.openai.azure.com. Required for `azure-openai`.",
+			},
+			"openai_endpoint": schema.StringAttribute{
+				Optional:    true,
+				Description: "Microsoft Foundry OpenAI endpoint URL, e.g. https://{resource-name}.openai.azure.com (`microsoft-foundry` only; at least one of `openai_endpoint` and `project_endpoint` is required).",
+			},
+			"project_endpoint": schema.StringAttribute{
+				Optional: true,
+				Description: "Microsoft Foundry project endpoint URL, e.g. https://{resource-name}.services.ai.azure.com/api/projects/{project} " +
+					"(`microsoft-foundry` only). Used for deployment discovery and provider-specific routes.",
 			},
 			"region": schema.StringAttribute{
 				Optional:    true,
@@ -246,15 +263,15 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 						},
 						"api_version": schema.StringAttribute{
 							Optional:    true,
-							Description: "Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry`.",
+							Description: "Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry` and `microsoft-foundry`.",
 						},
 						"foundation_model": schema.StringAttribute{
 							Optional:    true,
-							Description: "Foundation model identifier behind the deployment, e.g. gpt-4o-2024-11-20 (`azure-openai` only).",
+							Description: "Foundation model identifier behind the deployment, e.g. gpt-4o-2024-11-20 (`azure-openai` and `microsoft-foundry` only).",
 						},
 						"deployment_type": schema.StringAttribute{
 							Optional:    true,
-							Description: fmt.Sprintf("Azure OpenAI deployment type. One of: `%s` (`azure-openai` only).", strings.Join(deploymentTypeValues, "`, `")),
+							Description: fmt.Sprintf("Azure deployment type. One of: `%s` (`azure-openai` and `microsoft-foundry` only).", strings.Join(deploymentTypeValues, "`, `")),
 							Validators: []validator.String{
 								stringvalidator.OneOf(deploymentTypeValues...),
 							},
@@ -273,6 +290,13 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 						"azure_endpoint": schema.StringAttribute{
 							Optional:    true,
 							Description: "Azure AI Foundry endpoint URL, e.g. https://{deployment}.{region}.models.ai.azure.com. Required for `azure-foundry` models.",
+						},
+						"publisher": schema.StringAttribute{
+							Optional:    true,
+							Description: fmt.Sprintf("Publisher of the Microsoft Foundry deployment. One of: `%s`. Required for `microsoft-foundry` models.", strings.Join(publisherValues, "`, `")),
+							Validators: []validator.String{
+								stringvalidator.OneOf(publisherValues...),
+							},
 						},
 						"slug": schema.StringAttribute{
 							Optional:    true,
@@ -406,6 +430,18 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
 			requireModel(m.Region.IsNull(), name, "region", "must not be set")
 		}
+	case "microsoft-foundry":
+		requireAccount(!config.APIKey.IsNull(), "api_key", "is required")
+		requireAccount(config.AzureEndpoint.IsNull(), "azure_endpoint", "must not be set (use `openai_endpoint` and `project_endpoint`)")
+		requireAccount(config.BaseURL.IsNull(), "base_url", "must not be set")
+		requireAccount(!config.OpenAIEndpoint.IsNull() || !config.ProjectEndpoint.IsNull(), "openai_endpoint", "or `project_endpoint` is required")
+		for _, m := range config.Models {
+			name := m.Name.ValueString()
+			requireModel(!m.Publisher.IsNull(), name, "publisher", "is required")
+			requireModel(m.Region.IsNull(), name, "region", "must not be set")
+			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set (auth is configured on the account)")
+			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set (endpoints are configured on the account)")
+		}
 	case "virtual-model":
 		requireAccount(config.APIKey.IsNull(), "api_key", "must not be set (virtual model groups have no credentials)")
 		requireAccount(config.AzureEndpoint.IsNull(), "azure_endpoint", "must not be set")
@@ -444,6 +480,14 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 			requireModel(m.DeploymentType.IsNull(), name, "deployment_type", "must not be set")
 			requireModel(m.APIKey.IsNull(), name, "api_key", "must not be set")
 			requireModel(m.AzureEndpoint.IsNull(), name, "azure_endpoint", "must not be set")
+		}
+	}
+
+	if providerType != "microsoft-foundry" {
+		requireAccount(config.OpenAIEndpoint.IsNull(), "openai_endpoint", "must not be set")
+		requireAccount(config.ProjectEndpoint.IsNull(), "project_endpoint", "must not be set")
+		for _, m := range config.Models {
+			requireModel(m.Publisher.IsNull(), m.Name.ValueString(), "publisher", "must not be set")
 		}
 	}
 
@@ -561,6 +605,8 @@ func (r *providerAccountResource) Read(ctx context.Context, req resource.ReadReq
 		state.ProviderType = types.StringValue(strings.TrimPrefix(account.Manifest.Type, "provider-account/"))
 		state.BaseURL = stringOrNull(account.Manifest.BaseURL)
 		state.AzureEndpoint = stringOrNull(account.Manifest.AzureEndpoint)
+		state.OpenAIEndpoint = stringOrNull(account.Manifest.OpenAIEndpoint)
+		state.ProjectEndpoint = stringOrNull(account.Manifest.ProjectEndpoint)
 		state.Region = stringOrNull(account.Manifest.Region)
 		// The control plane returns auth_data as stored. With TrueFoundry
 		// secret references this is not secret material and round-trips
@@ -662,12 +708,14 @@ func integrationType(providerType string) string {
 func manifestFromModel(m *providerAccountModel) client.ProviderAccountManifest {
 	providerType := m.ProviderType.ValueString()
 	manifest := client.ProviderAccountManifest{
-		Type:          "provider-account/" + providerType,
-		Name:          m.Name.ValueString(),
-		BaseURL:       m.BaseURL.ValueString(),
-		AzureEndpoint: m.AzureEndpoint.ValueString(),
-		Region:        m.Region.ValueString(),
-		Integrations:  []client.ModelIntegration{},
+		Type:            "provider-account/" + providerType,
+		Name:            m.Name.ValueString(),
+		BaseURL:         m.BaseURL.ValueString(),
+		AzureEndpoint:   m.AzureEndpoint.ValueString(),
+		OpenAIEndpoint:  m.OpenAIEndpoint.ValueString(),
+		ProjectEndpoint: m.ProjectEndpoint.ValueString(),
+		Region:          m.Region.ValueString(),
+		Integrations:    []client.ModelIntegration{},
 	}
 	if !m.APIKey.IsNull() {
 		manifest.AuthData = &client.APIKeyAuth{Type: "api-key", APIKey: m.APIKey.ValueString()}
@@ -689,6 +737,7 @@ func manifestFromModel(m *providerAccountModel) client.ProviderAccountManifest {
 			DeploymentType:  model.DeploymentType.ValueString(),
 			Region:          model.Region.ValueString(),
 			AzureEndpoint:   model.AzureEndpoint.ValueString(),
+			Publisher:       model.Publisher.ValueString(),
 			Slug:            model.Slug.ValueString(),
 		}
 		if !model.APIKey.IsNull() {
@@ -744,6 +793,7 @@ func integrationToModel(manifest client.ModelIntegration, stateAPIKey types.Stri
 		DeploymentType:  stringOrNull(manifest.DeploymentType),
 		Region:          stringOrNull(manifest.Region),
 		AzureEndpoint:   stringOrNull(manifest.AzureEndpoint),
+		Publisher:       stringOrNull(manifest.Publisher),
 		Slug:            stringOrNull(manifest.Slug),
 		APIKey:          apiKey,
 	}

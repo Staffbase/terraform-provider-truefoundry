@@ -1813,6 +1813,21 @@ func validateManifest(typ string, manifest map[string]any) string {
 				return "azure_endpoint is required on azure-foundry model integrations"
 			}
 		}
+	case "provider-account/microsoft-foundry":
+		if !hasAPIKey(manifest) {
+			return "auth_data with api_key is required"
+		}
+		openai, _ := manifest["openai_endpoint"].(string)
+		project, _ := manifest["project_endpoint"].(string)
+		if openai == "" && project == "" {
+			return "openai_endpoint or project_endpoint is required"
+		}
+		for _, raw := range integrations {
+			m, _ := raw.(map[string]any)
+			if v, _ := m["publisher"].(string); v != "OpenAI" && v != "Other" {
+				return "publisher must be OpenAI or Other on microsoft-foundry model integrations"
+			}
+		}
 	case "provider-account/virtual-model":
 		for _, raw := range integrations {
 			m, _ := raw.(map[string]any)

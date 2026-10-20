@@ -207,6 +207,7 @@ The supported provider types differ in where credentials live:
 | `openai` | `api_key`, optional `base_url` | – |
 | `azure-openai` | `api_key`, `azure_endpoint` | `api_version` (required), `foundation_model`, `deployment_type`, `region` |
 | `azure-foundry` | – (no account auth) | `api_key`, `azure_endpoint` (both required), optional `api_version` |
+| `microsoft-foundry` | `api_key`, `openai_endpoint` and/or `project_endpoint` | `publisher` (required: `OpenAI` or `Other`), optional `api_version`, `foundation_model`, `deployment_type` |
 | `aws-bedrock` | `region` plus `api_key` or `access_key_id`+`secret_access_key` | optional `region` override |
 | `virtual-model` | – (no credentials) | `routing` (required): weight- or priority-based targets, optional `slug` |
 
@@ -263,8 +264,8 @@ make docs-check  # validate
 
 ## Known limitations
 
-- Provider types: `openai`, `azure-openai`, `azure-foundry`, `aws-bedrock`,
-  `virtual-model`. Not yet supported: Azure
+- Provider types: `openai`, `azure-openai`, `azure-foundry`, `microsoft-foundry`,
+  `aws-bedrock`, `virtual-model`. Not yet supported: Azure
   certificate/client-secret/workload-identity auth, AWS assumed-role auth,
   volume-based pricing tiers in `cost`, and the advanced routing options
   `retry_config`, `sticky_routing`, `sla_cutoff`, and `override_params`.
