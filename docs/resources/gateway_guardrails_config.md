@@ -3,10 +3,13 @@
 page_title: "truefoundry_gateway_guardrails_config Resource - TrueFoundry"
 subcategory: ""
 description: |-
+  Deprecated: migrate to truefoundry_gateway_guardrails_policy before 15 November 2026. Control plane v0.179+ returns no folded config on read, so this resource's apply read-back fails. See the named guardrails migration guide ../guides/named-guardrails-policies.md.
   Manages the AI gateway guardrails configuration: which guardrails (e.g. from a truefoundry_guardrail_group) run on which requests. Applied as a gateway-guardrails-config manifest via PUT /api/svc/v1/apply. The guardrails config is a tenant-wide singleton — define at most one of this resource per control plane; an apply replaces all rules. Import the existing config with terraform import truefoundry_gateway_guardrails_config.example gateway-guardrails-config.
 ---
 
 # truefoundry_gateway_guardrails_config (Resource)
+
+**Deprecated:** migrate to `truefoundry_gateway_guardrails_policy` before 15 November 2026. Control plane v0.179+ returns no folded config on read, so this resource's apply read-back fails. See the [named guardrails migration guide](../guides/named-guardrails-policies.md).
 
 Manages the AI gateway guardrails configuration: which guardrails (e.g. from a `truefoundry_guardrail_group`) run on which requests. Applied as a `gateway-guardrails-config` manifest via `PUT /api/svc/v1/apply`. **The guardrails config is a tenant-wide singleton** — define at most one of this resource per control plane; an apply replaces all rules. Import the existing config with `terraform import truefoundry_gateway_guardrails_config.example gateway-guardrails-config`.
 

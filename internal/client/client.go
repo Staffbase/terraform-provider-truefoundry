@@ -526,7 +526,11 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return &APIError{StatusCode: resp.StatusCode, Body: string(raw)}
 	}
-	if out != nil {
+	// v0.179+ returns an empty 200 for the retired folded guardrails config.
+	// Keep decoding strict for every other endpoint (an empty response there
+	// would otherwise silently become a zero-valued resource).
+	emptyGuardrailsConfig := path == "/api/svc/v1/llm-gateway/config/gateway-guardrails-config" && len(bytes.TrimSpace(raw)) == 0
+	if out != nil && !emptyGuardrailsConfig {
 		if err := json.Unmarshal(raw, out); err != nil {
 			return fmt.Errorf("decoding response of %s %s: %w", method, path, err)
 		}

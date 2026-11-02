@@ -43,6 +43,15 @@ Endpoints and envelopes are inconsistent. Check the client code before assuming;
 - `applies_to.type` is immutable: `RequiresReplace` with `name`/`team_name`. `team_name` is checked against real teams.
 - v1 `truefoundry_gateway_budget_config` is deprecated (dead after 15 Aug 2026). Migration table in README.
 
+### Guardrail policies (verified 2026-11-02)
+
+- Since control plane v0.179 each guardrail rule is its own named `gateway-guardrails-config` (top-level `name`, `when`, four required hook arrays, optional `custom_error_message`, no `rules`): `truefoundry_gateway_guardrails_policy`. The folded `rules[]` format (`truefoundry_gateway_guardrails_config`) is deprecated and removed **15 Nov 2026**.
+- Apply via generic `PUT apply` (honors `dryRun`, returns `action` + `data.id`). Unknown guardrail refs → 400. Read/list via `GET llm-gateway/config/gateway-guardrails-config/instances[/{name}]` (URL-encode name): list is a **bare array**, missing → 404 `Gateway configuration instance not found`. Delete via `DELETE .../instances/{name}` (seen in the UI, **not exercised live**); 404 = already deleted.
+- `when.target` needs a model / mcpServers / mcpTools condition (`*` allowed); model targets need an LLM input/output hook, MCP targets a pre/post-invoke hook. Only named policies enforce this.
+- On v0.179+ the folded singleton GET answers an **empty 200**. The client returns `ErrFoldedGuardrailsRetired` so refresh/import/read-back stop with migration guidance instead of dropping state; only 404 means missing. `mockcp.SetFoldedGuardrailsRetired` simulates it.
+- The instances list also answers 200 on the older Core control plane; that alone does not prove named apply works there.
+- Shared rule validators reject empty optional strings/collections (they normalize to null on read and would diff forever): omit instead.
+
 ### Roles and role bindings
 
 - `role` manifest is **camelCase** (`displayName`, `resourceType`). Listed via singular `GET /api/svc/v1/role`: bare array, ignores `?name=`, match client-side.
@@ -114,7 +123,8 @@ Control plane pattern `^[a-z][a-z0-9\-]{1,N}[a-z0-9]$`: lowercase letter first, 
 | `gateway-installation` | 3-35, consecutive hyphens allowed |
 | `ml-repo` | 3-100, upper case allowed |
 | `tenant-budget-config`, `team-budget-config` | 2-62, upper case allowed |
-| `gateway-*-config`, `gateway-global-settings` | not validated |
+| named `gateway-guardrails-config` policies | letters, digits, hyphens; no length limit |
+| other `gateway-*-config`, `gateway-global-settings` | not validated |
 
 `provider_account` spans two bounds: schema validator allows 64, `ValidateConfig` enforces 32 for all but `virtual-model`. `agent-skill`/`chat_prompt` names are unprobed (see above).
 

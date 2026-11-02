@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"net/http"
+	"net/url"
 )
 
 // InNotInCondition matches a value against Values with Condition "in" or
@@ -10,6 +11,60 @@ import (
 type InNotInCondition struct {
 	Condition string   `json:"condition"`
 	Values    []string `json:"values"`
+}
+
+// GuardrailsPolicyManifest is one named guardrail policy (control plane v0.179+).
+// Unlike the deprecated folded config, it has no rules array.
+type GuardrailsPolicyManifest struct {
+	Type                        string         `json:"type"`
+	Name                        string         `json:"name"`
+	When                        GuardrailsWhen `json:"when"`
+	LLMInputGuardrails          []string       `json:"llm_input_guardrails"`
+	LLMOutputGuardrails         []string       `json:"llm_output_guardrails"`
+	MCPToolPreInvokeGuardrails  []string       `json:"mcp_tool_pre_invoke_guardrails"`
+	MCPToolPostInvokeGuardrails []string       `json:"mcp_tool_post_invoke_guardrails"`
+	CustomErrorMessage          string         `json:"custom_error_message,omitempty"`
+}
+
+// GuardrailsPolicy is a stored named gateway configuration instance.
+type GuardrailsPolicy struct {
+	ID         string                   `json:"id"`
+	TenantName string                   `json:"tenantName"`
+	Type       string                   `json:"type"`
+	Manifest   GuardrailsPolicyManifest `json:"manifest"`
+}
+
+const guardrailsPoliciesPath = "/api/svc/v1/llm-gateway/config/gateway-guardrails-config/instances"
+
+// GetGuardrailsPolicy returns the named policy, or nil if it does not exist.
+func (c *Client) GetGuardrailsPolicy(ctx context.Context, name string) (*GuardrailsPolicy, error) {
+	var out GuardrailsPolicy
+	err := c.do(ctx, http.MethodGet, guardrailsPoliciesPath+"/"+url.PathEscape(name), nil, nil, &out)
+	if IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListGuardrailsPolicies reads the bare array returned by the instances endpoint.
+func (c *Client) ListGuardrailsPolicies(ctx context.Context) ([]GuardrailsPolicy, error) {
+	var out []GuardrailsPolicy
+	if err := c.do(ctx, http.MethodGet, guardrailsPoliciesPath, nil, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// DeleteGuardrailsPolicy deletes by name; a missing policy is already deleted.
+func (c *Client) DeleteGuardrailsPolicy(ctx context.Context, name string) error {
+	err := c.do(ctx, http.MethodDelete, guardrailsPoliciesPath+"/"+url.PathEscape(name), nil, nil, nil)
+	if IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // MCPToolTarget names an MCP server and which of its tools are covered.

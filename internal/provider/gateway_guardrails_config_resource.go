@@ -131,7 +131,11 @@ func inNotInSchema(description string) schema.SingleNestedAttribute {
 
 func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Manages the AI gateway guardrails configuration: which guardrails (e.g. from a " +
+		DeprecationMessage: "Use truefoundry_gateway_guardrails_policy (one named policy per rule). The folded config is removed on 15 November 2026; read-back fails on v0.179+ control planes.",
+		Description: "**Deprecated:** migrate to `truefoundry_gateway_guardrails_policy` before 15 November 2026. " +
+			"Control plane v0.179+ returns no folded config on read, so this resource's apply read-back fails. " +
+			"See the [named guardrails migration guide](../guides/named-guardrails-policies.md).\n\n" +
+			"Manages the AI gateway guardrails configuration: which guardrails (e.g. from a " +
 			"`truefoundry_guardrail_group`) run on which requests. Applied as a `gateway-guardrails-config` " +
 			"manifest via `PUT /api/svc/v1/apply`. **The guardrails config is a tenant-wide singleton** — define " +
 			"at most one of this resource per control plane; an apply replaces all rules. Import the existing " +
@@ -154,100 +158,105 @@ func (r *gatewayGuardrailsConfigResource) Schema(_ context.Context, _ resource.S
 				Description: "Guardrails rules. Every matching rule's guardrails run on a request; order is not significant.",
 				Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 				NestedObject: schema.NestedAttributeObject{
+					Attributes: guardrailsRuleSchema(),
+				},
+			},
+		},
+	}
+}
+
+// guardrailsRuleSchema is shared by folded rules and named policies.
+func guardrailsRuleSchema() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"id": schema.StringAttribute{
+			Required:    true,
+			Description: "Identifier of this rule, unique within the config.",
+			Validators:  []validator.String{stringvalidator.LengthBetween(1, 64)},
+		},
+		"when": schema.SingleNestedAttribute{
+			Required:    true,
+			Description: "Requests this rule applies to; all given parts must match. An empty block matches every request.",
+			Attributes: map[string]schema.Attribute{
+				"target": schema.SingleNestedAttribute{
+					Optional:    true,
+					Description: "Matches the request target; the given conditions are OR-ed.",
 					Attributes: map[string]schema.Attribute{
-						"id": schema.StringAttribute{
-							Required:    true,
-							Description: "Identifier of this rule, unique within the config.",
-							Validators:  []validator.String{stringvalidator.LengthBetween(1, 64)},
-						},
-						"when": schema.SingleNestedAttribute{
-							Required:    true,
-							Description: "Requests this rule applies to; all given parts must match. An empty block matches every request.",
+						"model":       inNotInSchema("Matches the model, as `<provider-account>/<model>` names."),
+						"mcp_servers": inNotInSchema("Matches the MCP server."),
+						"mcp_tools": schema.SingleNestedAttribute{
+							Optional:    true,
+							Description: "Matches MCP tools per server.",
 							Attributes: map[string]schema.Attribute{
-								"target": schema.SingleNestedAttribute{
-									Optional:    true,
-									Description: "Matches the request target; the given conditions are OR-ed.",
-									Attributes: map[string]schema.Attribute{
-										"model":       inNotInSchema("Matches the model, as `<provider-account>/<model>` names."),
-										"mcp_servers": inNotInSchema("Matches the MCP server."),
-										"mcp_tools": schema.SingleNestedAttribute{
-											Optional:    true,
-											Description: "Matches MCP tools per server.",
-											Attributes: map[string]schema.Attribute{
-												"condition": schema.StringAttribute{
-													Required:    true,
-													Description: fmt.Sprintf("Match semantics. One of: `%s`.", strings.Join(inNotInValues, "`, `")),
-													Validators: []validator.String{
-														stringvalidator.OneOf(inNotInValues...),
-													},
-												},
-												"values": schema.SetNestedAttribute{
-													Required:    true,
-													Description: "MCP servers and their covered tools.",
-													Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
-													NestedObject: schema.NestedAttributeObject{
-														Attributes: map[string]schema.Attribute{
-															"name": schema.StringAttribute{
-																Required:    true,
-																Description: "Name of the MCP server.",
-															},
-															"enable_all_tools": schema.BoolAttribute{
-																Required:    true,
-																Description: "Whether all tools of the server are covered.",
-															},
-															"enabled_tools": schema.SetAttribute{
-																Optional:    true,
-																ElementType: types.StringType,
-																Description: "Specific tools covered when `enable_all_tools` is false.",
-															},
-														},
-													},
-												},
+								"condition": schema.StringAttribute{
+									Required:    true,
+									Description: fmt.Sprintf("Match semantics. One of: `%s`.", strings.Join(inNotInValues, "`, `")),
+									Validators: []validator.String{
+										stringvalidator.OneOf(inNotInValues...),
+									},
+								},
+								"values": schema.SetNestedAttribute{
+									Required:    true,
+									Description: "MCP servers and their covered tools.",
+									Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
+									NestedObject: schema.NestedAttributeObject{
+										Attributes: map[string]schema.Attribute{
+											"name": schema.StringAttribute{
+												Required:    true,
+												Description: "Name of the MCP server.",
+											},
+											"enable_all_tools": schema.BoolAttribute{
+												Required:    true,
+												Description: "Whether all tools of the server are covered.",
+											},
+											"enabled_tools": schema.SetAttribute{
+												Optional:    true,
+												ElementType: types.StringType,
+												Description: "Specific tools covered when `enable_all_tools` is false.",
 											},
 										},
 									},
-								},
-								"subjects": schema.SingleNestedAttribute{
-									Optional:    true,
-									Description: "Matches the calling subject by FQN.",
-									Attributes: map[string]schema.Attribute{
-										"operator": schema.StringAttribute{
-											Required:    true,
-											Description: "How `in` and `not_in` combine: `and` or `or`.",
-											Validators: []validator.String{
-												stringvalidator.OneOf("and", "or"),
-											},
-										},
-										"in": schema.SetAttribute{
-											Optional:    true,
-											ElementType: types.StringType,
-											Description: "Subject FQNs to match.",
-										},
-										"not_in": schema.SetAttribute{
-											Optional:    true,
-											ElementType: types.StringType,
-											Description: "Subject FQNs to exclude.",
-										},
-									},
-								},
-								"metadata": schema.MapAttribute{
-									Optional:    true,
-									ElementType: types.StringType,
-									Description: "Request metadata key-value pairs to match.",
 								},
 							},
 						},
-						"llm_input_guardrails":            guardrailRefList("Guardrails run on the LLM input."),
-						"llm_output_guardrails":           guardrailRefList("Guardrails run on the LLM output."),
-						"mcp_tool_pre_invoke_guardrails":  guardrailRefList("Guardrails run before MCP tool invocations."),
-						"mcp_tool_post_invoke_guardrails": guardrailRefList("Guardrails run after MCP tool invocations."),
-						"custom_error_message": schema.StringAttribute{
+					},
+				},
+				"subjects": schema.SingleNestedAttribute{
+					Optional:    true,
+					Description: "Matches the calling subject by FQN.",
+					Attributes: map[string]schema.Attribute{
+						"operator": schema.StringAttribute{
+							Required:    true,
+							Description: "How `in` and `not_in` combine: `and` or `or`.",
+							Validators: []validator.String{
+								stringvalidator.OneOf("and", "or"),
+							},
+						},
+						"in": schema.SetAttribute{
 							Optional:    true,
-							Description: "Message returned to the caller when a guardrail blocks the request.",
+							ElementType: types.StringType,
+							Description: "Subject FQNs to match.",
+						},
+						"not_in": schema.SetAttribute{
+							Optional:    true,
+							ElementType: types.StringType,
+							Description: "Subject FQNs to exclude.",
 						},
 					},
 				},
+				"metadata": schema.MapAttribute{
+					Optional:    true,
+					ElementType: types.StringType,
+					Description: "Request metadata key-value pairs to match.",
+				},
 			},
+		},
+		"llm_input_guardrails":            guardrailRefList("Guardrails run on the LLM input."),
+		"llm_output_guardrails":           guardrailRefList("Guardrails run on the LLM output."),
+		"mcp_tool_pre_invoke_guardrails":  guardrailRefList("Guardrails run before MCP tool invocations."),
+		"mcp_tool_post_invoke_guardrails": guardrailRefList("Guardrails run after MCP tool invocations."),
+		"custom_error_message": schema.StringAttribute{
+			Optional:    true,
+			Description: "Message returned to the caller when a guardrail blocks the request.",
 		},
 	}
 }
@@ -393,7 +402,7 @@ func (r *gatewayGuardrailsConfigResource) apply(ctx context.Context, plan *gatew
 		return
 	}
 	if config == nil {
-		diags.AddError("Reading back TrueFoundry gateway guardrails config failed", "config not found after apply")
+		diags.AddError("Reading back TrueFoundry gateway guardrails config failed", "Config not found after apply. Control plane v0.179+ no longer reads folded guardrails configs. Migrate each rule to truefoundry_gateway_guardrails_policy before 15 November 2026.")
 		return
 	}
 	plan.ID = types.StringValue(config.ID)
@@ -406,57 +415,62 @@ func guardrailsConfigManifestFromModel(m *gatewayGuardrailsConfigModel) client.G
 		Rules: []client.GuardrailsRule{},
 	}
 	for _, rule := range m.Rules {
-		out := client.GuardrailsRule{
-			ID: rule.ID.ValueString(),
-			// The API requires the four guardrail lists; send empty lists
-			// for omitted attributes.
-			LLMInputGuardrails:          refsOrEmpty(rule.LLMInputGuardrails),
-			LLMOutputGuardrails:         refsOrEmpty(rule.LLMOutputGuardrails),
-			MCPToolPreInvokeGuardrails:  refsOrEmpty(rule.MCPToolPreInvokeGuardrails),
-			MCPToolPostInvokeGuardrails: refsOrEmpty(rule.MCPToolPostInvokeGuardrails),
-			CustomErrorMessage:          rule.CustomErrorMessage.ValueString(),
-		}
-		if w := rule.When; w != nil {
-			if t := w.Target; t != nil {
-				group := &client.GuardrailsTargetGroup{Operator: "or"}
-				if t.Model != nil {
-					group.Conditions.Model = inNotInFromModel(t.Model)
-				}
-				if t.MCPServers != nil {
-					group.Conditions.MCPServers = inNotInFromModel(t.MCPServers)
-				}
-				if t.MCPTools != nil {
-					tools := &client.MCPToolsCondition{Condition: t.MCPTools.Condition.ValueString()}
-					for _, v := range t.MCPTools.Values {
-						tools.Values = append(tools.Values, client.MCPToolTarget{
-							Name:           v.Name.ValueString(),
-							EnableAllTools: v.EnableAllTools.ValueBool(),
-							EnabledTools:   subjectsFromModel(v.EnabledTools),
-						})
-					}
-					group.Conditions.MCPTools = tools
-				}
-				out.When.Target = group
-			}
-			if s := w.Subjects; s != nil {
-				out.When.Subjects = &client.GuardrailsSubjectGroup{
-					Operator: s.Operator.ValueString(),
-					Conditions: client.GuardrailsSubjectClause{
-						In:    subjectsFromModel(s.In),
-						NotIn: subjectsFromModel(s.NotIn),
-					},
-				}
-			}
-			if len(w.Metadata) > 0 {
-				out.When.Metadata = map[string]string{}
-				for k, v := range w.Metadata {
-					out.When.Metadata[k] = v.ValueString()
-				}
-			}
-		}
-		manifest.Rules = append(manifest.Rules, out)
+		manifest.Rules = append(manifest.Rules, guardrailsRuleFromModel(rule))
 	}
 	return manifest
+}
+
+// guardrailsRuleFromModel shares hook and condition conversion with named policies.
+func guardrailsRuleFromModel(rule guardrailsRuleModel) client.GuardrailsRule {
+	out := client.GuardrailsRule{
+		ID: rule.ID.ValueString(),
+		// The API requires the four guardrail lists; send empty lists
+		// for omitted attributes.
+		LLMInputGuardrails:          refsOrEmpty(rule.LLMInputGuardrails),
+		LLMOutputGuardrails:         refsOrEmpty(rule.LLMOutputGuardrails),
+		MCPToolPreInvokeGuardrails:  refsOrEmpty(rule.MCPToolPreInvokeGuardrails),
+		MCPToolPostInvokeGuardrails: refsOrEmpty(rule.MCPToolPostInvokeGuardrails),
+		CustomErrorMessage:          rule.CustomErrorMessage.ValueString(),
+	}
+	if w := rule.When; w != nil {
+		if t := w.Target; t != nil {
+			group := &client.GuardrailsTargetGroup{Operator: "or"}
+			if t.Model != nil {
+				group.Conditions.Model = inNotInFromModel(t.Model)
+			}
+			if t.MCPServers != nil {
+				group.Conditions.MCPServers = inNotInFromModel(t.MCPServers)
+			}
+			if t.MCPTools != nil {
+				tools := &client.MCPToolsCondition{Condition: t.MCPTools.Condition.ValueString()}
+				for _, v := range t.MCPTools.Values {
+					tools.Values = append(tools.Values, client.MCPToolTarget{
+						Name:           v.Name.ValueString(),
+						EnableAllTools: v.EnableAllTools.ValueBool(),
+						EnabledTools:   subjectsFromModel(v.EnabledTools),
+					})
+				}
+				group.Conditions.MCPTools = tools
+			}
+			out.When.Target = group
+		}
+		if s := w.Subjects; s != nil {
+			out.When.Subjects = &client.GuardrailsSubjectGroup{
+				Operator: s.Operator.ValueString(),
+				Conditions: client.GuardrailsSubjectClause{
+					In:    subjectsFromModel(s.In),
+					NotIn: subjectsFromModel(s.NotIn),
+				},
+			}
+		}
+		if len(w.Metadata) > 0 {
+			out.When.Metadata = map[string]string{}
+			for k, v := range w.Metadata {
+				out.When.Metadata[k] = v.ValueString()
+			}
+		}
+	}
+	return out
 }
 
 // refsOrEmpty converts a guardrail reference list, mapping a null attribute
