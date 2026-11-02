@@ -107,6 +107,17 @@ func TestGuardrailsPolicyMockValidation(t *testing.T) {
 		{"unknown guardrail", func(m map[string]any) { m["llm_input_guardrails"] = []any{"nope/nope"} }, 400, "Guardrail Integration nope/nope referenced in rule Policy-1 does not exist."},
 		{"unknown integration in existing group", func(m map[string]any) { m["llm_input_guardrails"] = []any{"guardrails/nope"} }, 400, "does not exist"},
 		{"invalid name", func(m map[string]any) { m["name"] = "bad_name" }, 422, "name must contain only"},
+		{"empty custom error", func(m map[string]any) { m["custom_error_message"] = "" }, 422, "custom_error_message must not be empty"},
+		{"empty metadata", func(m map[string]any) { m["when"].(map[string]any)["metadata"] = map[string]any{} }, 422, "metadata must not be empty"},
+		{"empty subjects in", func(m map[string]any) {
+			m["when"].(map[string]any)["subjects"] = map[string]any{"operator": "and", "conditions": map[string]any{"in": []any{}, "not_in": []any{"user:excluded"}}}
+		}, 422, "subjects in must not be empty"},
+		{"empty subjects not_in", func(m map[string]any) {
+			m["when"].(map[string]any)["subjects"] = map[string]any{"operator": "and", "conditions": map[string]any{"in": []any{"team:everyone"}, "not_in": []any{}}}
+		}, 422, "subjects not_in must not be empty"},
+		{"empty enabled tools", func(m map[string]any) {
+			m["when"].(map[string]any)["target"].(map[string]any)["conditions"] = map[string]any{"mcpTools": map[string]any{"condition": "in", "values": []any{map[string]any{"name": "github", "enable_all_tools": false, "enabled_tools": []any{}}}}}
+		}, 422, "enabled_tools must not be empty"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -132,12 +143,24 @@ func TestGetGatewayGuardrailsConfigEmptyBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := c.GetGatewayGuardrailsConfig(context.Background()); err != nil || got != nil {
+	if got, err := c.GetGatewayGuardrailsConfig(context.Background()); !errors.Is(err, client.ErrFoldedGuardrailsRetired) || got != nil {
 		t.Fatalf("empty 200 = %+v, %v", got, err)
 	}
 	// Other endpoints must still reject malformed empty successful responses.
 	if _, err := c.ListGuardrailsPolicies(context.Background()); err == nil {
 		t.Fatal("instances list accepted an empty JSON body")
+	}
+}
+
+func TestGetGatewayGuardrailsConfigEmpty404(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+	defer srv.Close()
+	c, err := client.New(srv.URL, testAPIKey, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := c.GetGatewayGuardrailsConfig(context.Background()); err != nil || got != nil {
+		t.Fatalf("empty 404 = %+v, %v; want missing config, not retirement error", got, err)
 	}
 }
 

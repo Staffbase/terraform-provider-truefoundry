@@ -2,9 +2,14 @@ package client
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 )
+
+// ErrFoldedGuardrailsRetired distinguishes a retired singleton endpoint from
+// a missing config. Callers must stop refresh and retain state for migration.
+var ErrFoldedGuardrailsRetired = errors.New("the folded gateway guardrails config endpoint is retired on control plane v0.179+ (folded format removal: 15 November 2026). Migrate to truefoundry_gateway_guardrails_policy, one policy per rule; see https://github.com/Staffbase/terraform-provider-truefoundry/blob/main/docs/guides/named-guardrails-policies.md")
 
 // InNotInCondition matches a value against Values with Condition "in" or
 // "not_in".
@@ -147,7 +152,8 @@ type GatewayGuardrailsConfig struct {
 }
 
 // GetGatewayGuardrailsConfig returns the tenant's gateway guardrails config,
-// or nil if none is configured.
+// or nil if none is configured. An empty successful response on v0.179+
+// returns ErrFoldedGuardrailsRetired, not a missing config.
 func (c *Client) GetGatewayGuardrailsConfig(ctx context.Context) (*GatewayGuardrailsConfig, error) {
 	var out GatewayGuardrailsConfig
 	err := c.do(ctx, http.MethodGet, "/api/svc/v1/llm-gateway/config/gateway-guardrails-config", nil, nil, &out)

@@ -46,7 +46,7 @@ resource "truefoundry_gateway_guardrails_policy" "region" {
 
 ### Optional
 
-- `custom_error_message` (String) Message returned to the caller when a guardrail blocks the request.
+- `custom_error_message` (String) Message returned to the caller when a guardrail blocks the request. Omit rather than setting an empty string.
 - `llm_input_guardrails` (List of String) Guardrails run on the LLM input. References are `<guardrail-group>/<guardrail-config>` names. Omit the attribute (rather than an empty list) when unused.
 - `llm_output_guardrails` (List of String) Guardrails run on the LLM output. References are `<guardrail-group>/<guardrail-config>` names. Omit the attribute (rather than an empty list) when unused.
 - `mcp_tool_post_invoke_guardrails` (List of String) Guardrails run after MCP tool invocations. References are `<guardrail-group>/<guardrail-config>` names. Omit the attribute (rather than an empty list) when unused.
@@ -61,7 +61,7 @@ resource "truefoundry_gateway_guardrails_policy" "region" {
 
 Optional:
 
-- `metadata` (Map of String) Request metadata key-value pairs to match.
+- `metadata` (Map of String) Request metadata key-value pairs to match. Omit rather than setting an empty map.
 - `subjects` (Attributes) Matches the calling subject by FQN. (see [below for nested schema](#nestedatt--when--subjects))
 - `target` (Attributes) Matches the request target; the given conditions are OR-ed. (see [below for nested schema](#nestedatt--when--target))
 
@@ -74,8 +74,8 @@ Required:
 
 Optional:
 
-- `in` (Set of String) Subject FQNs to match.
-- `not_in` (Set of String) Subject FQNs to exclude.
+- `in` (Set of String) Subject FQNs to match. Omit rather than setting an empty set.
+- `not_in` (Set of String) Subject FQNs to exclude. Omit rather than setting an empty set.
 
 
 <a id="nestedatt--when--target"></a>
@@ -114,7 +114,7 @@ Required:
 
 Optional:
 
-- `enabled_tools` (Set of String) Specific tools covered when `enable_all_tools` is false.
+- `enabled_tools` (Set of String) Specific tools covered when `enable_all_tools` is false. Omit rather than setting an empty set.
 
 
 

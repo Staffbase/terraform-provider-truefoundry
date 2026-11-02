@@ -65,7 +65,11 @@ func TestAccGatewayGuardrailsPolicy_lifecycle(t *testing.T) {
 				resource.TestCheckResourceAttr(addr, "when.metadata.environment", "dev"),
 			)},
 			{ResourceName: addr, ImportState: true, ImportStateVerify: true, ImportStateId: "Policy-1"},
+			// Refresh must round-trip every configured optional value without
+			// changing it to null and proposing an update.
+			{Config: providerConfig(host) + guardrailsPolicyConfig("Policy-1", "Blocked"), PlanOnly: true, ExpectNonEmptyPlan: false},
 			{Config: providerConfig(host) + guardrailsPolicyConfig("Policy-1", "New message"), Check: resource.TestCheckResourceAttr(addr, "custom_error_message", "New message")},
+			{Config: providerConfig(host) + guardrailsPolicyConfig("Policy-1", "New message"), PlanOnly: true, ExpectNonEmptyPlan: false},
 			// MCP hooks share the folded rule conversion, including per-tool matching.
 			{Config: providerConfig(host) + guardrailsPolicyGroupConfig + `
 resource "truefoundry_gateway_guardrails_policy" "test" {
@@ -148,4 +152,39 @@ func TestAccGatewayGuardrailsPolicy_invalidName(t *testing.T) {
 			ExpectError: regexp.MustCompile("must contain only letters, digits, and hyphens"),
 		}},
 	})
+}
+
+func TestAccGuardrails_emptyValuesRejected(t *testing.T) {
+	_, host := startMockControlPlane(t)
+	const modelTarget = `target = { model = { condition = "in", values = ["*"] } }`
+	cases := []struct{ name, when, extra string }{
+		{"custom error message", modelTarget, `custom_error_message = ""`},
+		{"metadata", modelTarget + `, metadata = {}`, ""},
+		{"subjects in", modelTarget + `, subjects = { operator = "and", in = [], not_in = ["user:excluded"] }`, ""},
+		{"subjects not_in", modelTarget + `, subjects = { operator = "and", in = ["team:everyone"], not_in = [] }`, ""},
+		{"model values", `target = { model = { condition = "in", values = [] } }`, ""},
+		{"mcp server values", `target = { mcp_servers = { condition = "in", values = [] } }`, ""},
+		{"mcp tool values", `target = { mcp_tools = { condition = "in", values = [] } }`, ""},
+		{"enabled tools", `target = { mcp_tools = { condition = "in", values = [{ name = "github", enable_all_tools = false, enabled_tools = [] }] } }`, ""},
+	}
+	// These validators live in the shared rule schema, so both resources
+	// must reject configurations that normalize empty collections to null.
+	for _, typ := range []string{"gateway_guardrails_policy", "gateway_guardrails_config"} {
+		for _, tc := range cases {
+			t.Run(typ+"/"+tc.name, func(t *testing.T) {
+				body := fmt.Sprintf("when = { %s }\nllm_input_guardrails = [\"g/c\"]\nmcp_tool_pre_invoke_guardrails = [\"g/c\"]\n%s", tc.when, tc.extra)
+				if typ == "gateway_guardrails_config" {
+					body = "rules = [{ id = \"rule-1\"\n" + body + "\n}]"
+				}
+				resource.Test(t, resource.TestCase{
+					ProtoV6ProviderFactories: protoV6Factories,
+					Steps: []resource.TestStep{{
+						Config:      providerConfig(host) + fmt.Sprintf("resource \"truefoundry_%s\" \"bad\" {\nname = \"policy-1\"\n%s\n}", typ, body),
+						PlanOnly:    true,
+						ExpectError: regexp.MustCompile("at least 1"),
+					}},
+				})
+			})
+		}
+	}
 }

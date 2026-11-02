@@ -43,8 +43,9 @@ type Server struct {
 	nextID             int
 	tokenReads         int // count of GET .../virtual-accounts/{id}/token requests
 
-	secretValuesHidden  bool // see HideSecretValues
-	legacyGrantsRetired bool // see RetireLegacyGrants
+	secretValuesHidden      bool // see HideSecretValues
+	legacyGrantsRetired     bool // see RetireLegacyGrants
+	foldedGuardrailsRetired bool // see SetFoldedGuardrailsRetired
 }
 
 type account struct {
@@ -212,6 +213,10 @@ func (s *Server) GatewayConfigCount() int {
 func (s *Server) handleGetGatewayConfig(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if r.PathValue("type") == "gateway-guardrails-config" && s.foldedGuardrailsRetired {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 	cfg, ok := s.gwconfigs[r.PathValue("type")]
 	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"message": "gateway config not found"})
@@ -223,6 +228,14 @@ func (s *Server) handleGetGatewayConfig(w http.ResponseWriter, r *http.Request) 
 		"type":       r.PathValue("type"),
 		"manifest":   cfg.manifest,
 	})
+}
+
+// SetFoldedGuardrailsRetired toggles the v0.179+ empty singleton response
+// without deleting the stored config; false restores legacy reads for tests.
+func (s *Server) SetFoldedGuardrailsRetired(retired bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.foldedGuardrailsRetired = retired
 }
 
 func (s *Server) handleApplyVirtualAccount(w http.ResponseWriter, r *http.Request) {
@@ -1263,6 +1276,14 @@ func validateGatewayGuardrailsConfig(manifest map[string]any) string {
 		if !ok {
 			return "when is required on guardrails rules"
 		}
+		// Match the provider's omit-rather-than-empty contract: these optional
+		// fields otherwise read back as null and cause perpetual plan changes.
+		if message, ok := m["custom_error_message"].(string); ok && message == "" {
+			return "custom_error_message must not be empty; omit it instead"
+		}
+		if metadata, ok := when["metadata"].(map[string]any); ok && len(metadata) == 0 {
+			return "metadata must not be empty; omit it instead"
+		}
 		if target, ok := when["target"].(map[string]any); ok {
 			if op, _ := target["operator"].(string); op != "or" {
 				return fmt.Sprintf("unknown target operator %q", target["operator"])
@@ -1292,6 +1313,9 @@ func validateGatewayGuardrailsConfig(manifest map[string]any) string {
 					if _, ok := vm["enable_all_tools"].(bool); !ok {
 						return "enable_all_tools is required on mcpTools values"
 					}
+					if tools, ok := vm["enabled_tools"].([]any); ok && len(tools) == 0 {
+						return "enabled_tools must not be empty; omit it instead"
+					}
 				}
 			}
 		}
@@ -1300,6 +1324,11 @@ func validateGatewayGuardrailsConfig(manifest map[string]any) string {
 				return fmt.Sprintf("unknown subjects operator %q", subjects["operator"])
 			}
 			conditions, _ := subjects["conditions"].(map[string]any)
+			for _, key := range []string{"in", "not_in"} {
+				if values, ok := conditions[key].([]any); ok && len(values) == 0 {
+					return fmt.Sprintf("subjects %s must not be empty; omit it instead", key)
+				}
+			}
 			in, _ := conditions["in"].([]any)
 			notIn, _ := conditions["not_in"].([]any)
 			if len(in) == 0 && len(notIn) == 0 {

@@ -10,7 +10,9 @@ description: |-
 Control plane v0.179 replaces the folded `gateway-guardrails-config` singleton
 with individually named policies. The folded format is removed on **15 November
 2026**. On v0.179+ its singleton GET returns an empty body, so the deprecated
-resource cannot read back an applied config. Use
+resource stops refresh, import, and apply read-back with a migration error.
+This preserves existing state rather than treating the retired endpoint as a
+missing resource; only a 404 response means not found. Use
 [`truefoundry_gateway_guardrails_policy`](../resources/gateway_guardrails_policy.md)
 instead of
 [`truefoundry_gateway_guardrails_config`](../resources/gateway_guardrails_config.md).

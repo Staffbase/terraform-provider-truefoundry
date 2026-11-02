@@ -75,7 +75,7 @@ func TestFoldedGuardrailsApplyEmptyReadBack(t *testing.T) {
 	if !diags.HasError() {
 		t.Fatal("folded apply accepted empty read-back")
 	}
-	if detail := diags[0].Detail(); !strings.Contains(detail, "truefoundry_gateway_guardrails_policy") || !strings.Contains(detail, "15 November 2026") {
+	if detail := diags[0].Detail(); detail != client.ErrFoldedGuardrailsRetired.Error() || !strings.Contains(detail, "named-guardrails-policies.md") {
 		t.Fatalf("missing migration advice: %s", detail)
 	}
 }

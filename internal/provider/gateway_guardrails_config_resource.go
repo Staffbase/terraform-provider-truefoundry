@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/setvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -211,7 +212,8 @@ func guardrailsRuleSchema() map[string]schema.Attribute {
 											"enabled_tools": schema.SetAttribute{
 												Optional:    true,
 												ElementType: types.StringType,
-												Description: "Specific tools covered when `enable_all_tools` is false.",
+												Description: "Specific tools covered when `enable_all_tools` is false. Omit rather than setting an empty set.",
+												Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 											},
 										},
 									},
@@ -234,19 +236,22 @@ func guardrailsRuleSchema() map[string]schema.Attribute {
 						"in": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
-							Description: "Subject FQNs to match.",
+							Description: "Subject FQNs to match. Omit rather than setting an empty set.",
+							Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 						},
 						"not_in": schema.SetAttribute{
 							Optional:    true,
 							ElementType: types.StringType,
-							Description: "Subject FQNs to exclude.",
+							Description: "Subject FQNs to exclude. Omit rather than setting an empty set.",
+							Validators:  []validator.Set{setvalidator.SizeAtLeast(1)},
 						},
 					},
 				},
 				"metadata": schema.MapAttribute{
 					Optional:    true,
 					ElementType: types.StringType,
-					Description: "Request metadata key-value pairs to match.",
+					Description: "Request metadata key-value pairs to match. Omit rather than setting an empty map.",
+					Validators:  []validator.Map{mapvalidator.SizeAtLeast(1)},
 				},
 			},
 		},
@@ -256,7 +261,8 @@ func guardrailsRuleSchema() map[string]schema.Attribute {
 		"mcp_tool_post_invoke_guardrails": guardrailRefList("Guardrails run after MCP tool invocations."),
 		"custom_error_message": schema.StringAttribute{
 			Optional:    true,
-			Description: "Message returned to the caller when a guardrail blocks the request.",
+			Description: "Message returned to the caller when a guardrail blocks the request. Omit rather than setting an empty string.",
+			Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 		},
 	}
 }
