@@ -49,7 +49,7 @@ categories:
 # clickable in the draft body.
 replacers:
   - search: '/\(#(\d+)\)/g'
-    replace: '([#$1](https://github.com/$OWNER/$REPOSITORY/pull/$1))'
+    replace: '([#$1](https://github.com/Staffbase/terraform-provider-truefoundry/pull/$1))'
 
 template: |
   ## Changes
