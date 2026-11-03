@@ -45,6 +45,12 @@ categories:
   - type: "version-resolver"
     semver-increment: "patch"
 
+# Squash-merge titles end in "(#123)"; make that an explicit link so it stays
+# clickable in the draft body.
+replacers:
+  - search: '/\(#(\d+)\)/g'
+    replace: '([#$1](https://github.com/$OWNER/$REPOSITORY/pull/$1))'
+
 template: |
   ## Changes
 
