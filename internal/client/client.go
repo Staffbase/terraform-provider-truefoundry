@@ -526,6 +526,12 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values, 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return &APIError{StatusCode: resp.StatusCode, Body: string(raw)}
 	}
+	// v0.179+ returns an empty 200 for the retired folded guardrails config.
+	// This is not a missing config: fail refresh rather than dropping state
+	// and proposing recreation (or silently skipping deletion on destroy).
+	if method == http.MethodGet && path == "/api/svc/v1/llm-gateway/config/gateway-guardrails-config" && len(bytes.TrimSpace(raw)) == 0 {
+		return ErrFoldedGuardrailsRetired
+	}
 	if out != nil {
 		if err := json.Unmarshal(raw, out); err != nil {
 			return fmt.Errorf("decoding response of %s %s: %w", method, path, err)

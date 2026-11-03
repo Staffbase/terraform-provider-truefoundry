@@ -116,6 +116,7 @@ func (p *TrueFoundryProvider) Resources(_ context.Context) []func() resource.Res
 		newGatewayDataAccessConfigResource,
 		newGatewayDataRoutingConfigResource,
 		newGatewayGuardrailsConfigResource,
+		newGatewayGuardrailsPolicyResource,
 		newGatewayLoadBalancingConfigResource,
 		newGatewayOtelConfigResource,
 		newGatewayRateLimitingConfigResource,

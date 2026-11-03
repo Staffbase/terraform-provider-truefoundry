@@ -188,6 +188,7 @@ terraform import truefoundry_team_budget_config.platform platform-per-user
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
+terraform import truefoundry_gateway_guardrails_policy.region dev-de1-001-gr-frc
 terraform import truefoundry_gateway_rate_limiting_config.limits gateway-rate-limiting-config
 terraform import truefoundry_gateway_load_balancing_config.routing gateway-load-balancing-config
 terraform import truefoundry_gateway_otel_config.otel gateway-otel-config
@@ -229,6 +230,7 @@ Full schema reference, examples, and import syntax in [`docs/`](docs/):
 [`truefoundry_gateway_data_access_config`](docs/resources/gateway_data_access_config.md),
 [`truefoundry_gateway_data_routing_config`](docs/resources/gateway_data_routing_config.md),
 [`truefoundry_gateway_guardrails_config`](docs/resources/gateway_guardrails_config.md),
+[`truefoundry_gateway_guardrails_policy`](docs/resources/gateway_guardrails_policy.md),
 [`truefoundry_gateway_rate_limiting_config`](docs/resources/gateway_rate_limiting_config.md),
 [`truefoundry_gateway_load_balancing_config`](docs/resources/gateway_load_balancing_config.md),
 [`truefoundry_gateway_otel_config`](docs/resources/gateway_otel_config.md),
@@ -286,7 +288,8 @@ make docs-check  # validate
   `truefoundry_team_budget_config`), data access config
   (`truefoundry_gateway_data_access_config`), data routing
   config (`truefoundry_gateway_data_routing_config`), guardrails config
-  (`truefoundry_gateway_guardrails_config`), rate limiting config
+  (`truefoundry_gateway_guardrails_config`, deprecated), named guardrail policies
+  (`truefoundry_gateway_guardrails_policy`), rate limiting config
   (`truefoundry_gateway_rate_limiting_config`), load balancing config
   (`truefoundry_gateway_load_balancing_config`), OpenTelemetry config
   (`truefoundry_gateway_otel_config`), and global settings
@@ -298,6 +301,15 @@ make docs-check  # validate
 - Guardrail types: `azure-prompt-shield` and `azure-content-safety` (API-key auth,
   as `truefoundry_guardrail_group`). Other guardrail integrations (AWS Bedrock
   guardrails, PII detection, custom webhooks, …) are not modeled.
+- Folded guardrails are removed on **15 November 2026**. On control plane v0.179+
+  the old singleton read returns an empty 200, so its resource cannot read back
+  an apply. Migrate to one `truefoundry_gateway_guardrails_policy` per former
+  rule: rule `id` → policy `name`; `when`, the four hook lists, and
+  `custom_error_message` keep their names. Named policies require an explicit
+  target and hooks appropriate to its kind. See the
+  [named guardrails migration guide](docs/guides/named-guardrails-policies.md)
+  for safe state removal and imports; do not destroy the folded config during
+  migration.
 - MCP servers: remote (`truefoundry_mcp_server`), OpenAPI-based
   (`truefoundry_openapi_mcp_server`), and virtual
   (`truefoundry_virtual_mcp_server`) servers are modeled. Stdio and

@@ -228,6 +228,41 @@ func TestAccGatewayGuardrailsConfig_import(t *testing.T) {
 	})
 }
 
+func TestAccGatewayGuardrailsConfig_retiredRefreshPreservesState(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+	const addr = "truefoundry_gateway_guardrails_config.guardrails"
+	var originalID string
+	config := providerConfig(host) + gatewayGuardrailsConfigConfig
+	retiredError := regexp.MustCompile(`(?s)endpoint is retired.*truefoundry_gateway_guardrails_policy.*named-guardrails-policies`)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		CheckDestroy: func(*terraform.State) error {
+			if n := mock.GatewayConfigCount(); n != 0 {
+				return fmt.Errorf("%d folded configs left after destroy", n)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{Config: config, Check: func(s *terraform.State) error {
+				originalID = s.RootModule().Resources[addr].Primary.ID
+				return nil
+			}},
+			{PreConfig: func() { mock.SetFoldedGuardrailsRetired(true) }, Config: config, PlanOnly: true, ExpectError: retiredError},
+			// Import also reads the endpoint and must stop with migration
+			// guidance, not report a nonexistent resource or adopt zero values.
+			{ResourceName: addr, ImportState: true, ImportStateId: "gateway-guardrails-config", ExpectError: retiredError},
+			{PreConfig: func() { mock.SetFoldedGuardrailsRetired(false) }, Config: config, PlanOnly: true, ExpectNonEmptyPlan: false,
+				Check: func(s *terraform.State) error {
+					rs := s.RootModule().Resources[addr]
+					if rs == nil || rs.Primary.ID != originalID {
+						return fmt.Errorf("refresh discarded or replaced folded state: %+v", rs)
+					}
+					return nil
+				}},
+		},
+	})
+}
+
 func TestAccGatewayGuardrailsConfig_invalidConfigRejected(t *testing.T) {
 	_, host := startMockControlPlane(t)
 
