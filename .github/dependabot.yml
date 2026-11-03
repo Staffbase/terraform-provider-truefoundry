@@ -3,6 +3,10 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
+    # Explicit labels: a bump must not pick up `major`, which maps to a breaking release.
+    labels:
+      - "dependencies"
+      - "chore"
     schedule:
       interval: "weekly"
     groups:
@@ -12,6 +16,10 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Explicit labels: a bump must not pick up `major`, which maps to a breaking release.
+    labels:
+      - "dependencies"
+      - "chore"
     schedule:
       interval: "weekly"
     groups:
