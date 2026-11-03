@@ -2,6 +2,8 @@ package client
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 )
 
@@ -19,12 +21,40 @@ const rolesPath = "/api/svc/v1/role"
 
 // RoleManifest is a "role" manifest. ⚠️ camelCase field names — see above.
 type RoleManifest struct {
-	Type         string   `json:"type"`
-	Name         string   `json:"name"`
-	DisplayName  string   `json:"displayName"`
-	Description  string   `json:"description,omitempty"`
-	ResourceType string   `json:"resourceType"`
-	Permissions  []string `json:"permissions"`
+	Type         string          `json:"type"`
+	Name         string          `json:"name"`
+	DisplayName  string          `json:"displayName"`
+	Description  string          `json:"description,omitempty"`
+	ResourceType string          `json:"resourceType"`
+	Permissions  RolePermissions `json:"permissions"`
+}
+
+// RolePermissions is the permission list of a role. The list endpoint returns
+// every role of the tenant, and on the TrueFoundry Cloud control plane at least
+// one built-in role carries its permissions as a single JSON string instead of
+// an array (DEVS-1633, 2026-11-03: "cannot unmarshal string into Go struct field
+// RoleManifest.manifest.permissions of type []string"). One such role made every
+// role read fail, so a string decodes to a one-element list (an empty string to
+// an empty list). Encoding is unchanged: always an array.
+type RolePermissions []string
+
+// UnmarshalJSON accepts an array of strings, a single string, or null.
+func (p *RolePermissions) UnmarshalJSON(data []byte) error {
+	var list []string
+	if err := json.Unmarshal(data, &list); err == nil {
+		*p = list
+		return nil
+	}
+	var single string
+	if err := json.Unmarshal(data, &single); err != nil {
+		return fmt.Errorf("role permissions: expected an array of strings or a string, got %s", data)
+	}
+	if single == "" {
+		*p = RolePermissions{}
+		return nil
+	}
+	*p = RolePermissions{single}
+	return nil
 }
 
 // Role is one entry of GET /api/svc/v1/role.

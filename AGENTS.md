@@ -56,6 +56,7 @@ Endpoints and envelopes are inconsistent. Check the client code before assuming;
 
 - `role` manifest is **camelCase** (`displayName`, `resourceType`). Listed via singular `GET /api/svc/v1/role`: bare array, ignores `?name=`, match client-side.
 - Only `tenant` and `team` scopes accepted (`account` is normalized to `tenant`).
+- The list returns every role, built-in ones included. On the Cloud control plane at least one carries `permissions` as a single string (2026-11-03), so `RolePermissions` also decodes a string; otherwise one odd role breaks every role read.
 - `Read` refuses to adopt reserved roles. `Delete` leaves TrueFoundry default roles (e.g. `member`) in place with a warning.
 - Permission vocabulary is a closed 81-string set, duplicated in `internal/mockcp/roles.go`. Keep in sync.
 - `role_binding`: camelCase `{data}` envelopes, paginated list, read by ID, import by name. Shape from API reference, **not verified against a real control plane**; probe with `dryRun`.
