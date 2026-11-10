@@ -19,6 +19,10 @@ Terraform, authenticated against a TrueFoundry control plane with an API token:
 
 Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraform/plugin/framework).
 
+This is a community provider maintained by [Staffbase](https://www.staffbase.com).
+It is not an official TrueFoundry product. Contributions are welcome — see
+[Contributing](#contributing).
+
 ## Requirements
 
 - [Terraform](https://developer.hashicorp.com/terraform/downloads) >= 1.0
@@ -27,9 +31,12 @@ Built on the [Terraform Plugin Framework](https://developer.hashicorp.com/terraf
 
 ## Getting started
 
-The provider is published to the Staffbase Terraform Enterprise private
-registry. Outside of TFE workspaces, authenticate once with
-`terraform login terraform.staffbase.com`.
+Releases are published to the Staffbase Terraform Enterprise private registry
+(`terraform.staffbase.com/staffbase/truefoundry`) and as
+[GitHub releases](https://github.com/Staffbase/terraform-provider-truefoundry/releases).
+Until the provider is available on the public Terraform Registry, outside
+users can build it from source and use a `dev_overrides` CLI config (see
+[Development](#development)).
 
 ```hcl
 terraform {
@@ -188,7 +195,7 @@ terraform import truefoundry_team_budget_config.platform platform-per-user
 terraform import truefoundry_gateway_data_access_config.access gateway-data-access-config
 terraform import truefoundry_gateway_data_routing_config.routing gateway-data-routing-config
 terraform import truefoundry_gateway_guardrails_config.guardrails gateway-guardrails-config
-terraform import truefoundry_gateway_guardrails_policy.region dev-de1-001-gr-frc
+terraform import truefoundry_gateway_guardrails_policy.region guardrails-france
 terraform import truefoundry_gateway_rate_limiting_config.limits gateway-rate-limiting-config
 terraform import truefoundry_gateway_load_balancing_config.routing gateway-load-balancing-config
 terraform import truefoundry_gateway_otel_config.otel gateway-otel-config
@@ -411,3 +418,17 @@ cd examples/demo && TF_CLI_CONFIG_FILE=/tmp/dev.tfrc terraform apply
 
 Pushing a `v*` tag builds, signs, and publishes the provider to the
 Terraform Enterprise private registry — see [RELEASING.md](RELEASING.md).
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. Please read
+[CONTRIBUTING.md](CONTRIBUTING.md) first: contributors sign the
+[Contributor License Agreement](CLA.md) on their first pull request.
+
+## License
+
+Copyright 2026, Staffbase SE and contributors. Licensed under the
+[Apache License, Version 2.0](LICENSE).
+
+TrueFoundry is a trademark of its respective owner. This project is not
+affiliated with or endorsed by TrueFoundry.

@@ -41,3 +41,4 @@
 - [ ] README / AGENTS.md updated if behaviour or API contract knowledge changed
 - [ ] Commits follow Conventional Commits (`feat(ABC-123): …`) — CI checks this
 - [ ] Labelled for release-drafter
+- [ ] Read the [contributing guideline](../blob/main/CONTRIBUTING.md) and signed the CLA

@@ -4,10 +4,10 @@ metadata:
   name: terraform-provider-truefoundry
   title: TrueFoundry Terraform Provider
   description: >
-    Terraform provider for the TrueFoundry AI Gateway. Manages provider
-    accounts (OpenAI, Azure OpenAI, Azure Foundry, AWS Bedrock, virtual
-    models), gateway configuration, guardrails, secret stores, and virtual
-    accounts as code.
+    Open source Terraform provider for the TrueFoundry AI Gateway. Manages
+    provider accounts (OpenAI, Azure OpenAI, Azure Foundry, AWS Bedrock,
+    virtual models), gateway configuration, guardrails, secret stores, and
+    virtual accounts as code.
   annotations:
     github.com/project-slug: Staffbase/terraform-provider-truefoundry
   tags:
@@ -16,7 +16,11 @@ metadata:
     - infrastructure-as-code
     - ai
     - truefoundry
+    - open-source
   links:
+    - url: https://github.com/Staffbase/terraform-provider-truefoundry
+      title: Repository
+      icon: github
     - url: https://www.truefoundry.com/docs/ai-gateway/intro-to-llm-gateway
       title: AI Gateway Docs
       icon: docs
