@@ -32,7 +32,7 @@ type RoleManifest struct {
 // RolePermissions is the permission list of a role. The list endpoint returns
 // every role of the tenant, and on the TrueFoundry Cloud control plane at least
 // one built-in role carries its permissions as a single JSON string instead of
-// an array (DEVS-1633, 2026-11-03: "cannot unmarshal string into Go struct field
+// an array (2026-11-03: "cannot unmarshal string into Go struct field
 // RoleManifest.manifest.permissions of type []string"). One such role made every
 // role read fail, so a string decodes to a one-element list (an empty string to
 // an empty list). Encoding is unchanged: always an array.

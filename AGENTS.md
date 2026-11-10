@@ -104,7 +104,7 @@ Per-resource `collaborators` and virtual account `permissions` are deprecated (c
 
 ### Virtual accounts
 
-Token is set on create and not refetched on refresh (it doubled request count, DEVS-1533), unless `auto_rotate` is set or the token was never populated (fresh import). `auto_rotate` shape (`auto_rotate_interval`/`grace_period`, min 30/1 days) is from docs/SDK, **not verified live**.
+Token is set on create and not refetched on refresh (it doubled the request count), unless `auto_rotate` is set or the token was never populated (fresh import). `auto_rotate` shape (`auto_rotate_interval`/`grace_period`, min 30/1 days) is from docs/SDK, **not verified live**.
 
 ## Manifest name rules
 
@@ -135,7 +135,7 @@ Fetch manifest shapes from the SDK serialization files, then touch: `providerTyp
 
 ## Commits
 
-Conventional Commits, ticket as scope where one exists: `feat(DEVS-1432): ...`, `chore(deps): ...`, `fix: ...`. Format `type(scope)!: subject`, header ≤ 100 chars. Types: `feat fix chore ci docs refactor test perf build style revert`. CI checks every non-merge commit.
+Conventional Commits, ticket as scope where one exists: `feat(ABC-123): ...`, `chore(deps): ...`, `fix: ...`. Format `type(scope)!: subject`, header ≤ 100 chars. Types: `feat fix chore ci docs refactor test perf build style revert`. CI checks every non-merge commit.
 
 Commit prefixes do not drive releases: version and changelog come from **PR labels**. `!`/`BREAKING CHANGE` does nothing alone; label the PR `breaking`.
 

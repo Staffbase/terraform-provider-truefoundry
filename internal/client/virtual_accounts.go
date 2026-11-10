@@ -29,7 +29,7 @@ type SecretStoreConfig struct {
 // virtual account. Its presence in the manifest is what activates rotation;
 // there is no separate enabled flag. Shape per the published
 // truefoundry-typescript-sdk / API docs (2026-09-10) — unverified against a
-// real control plane: Staffbase does not use this feature yet, so there is
+// real control plane: no live account with rotation was available, so there is
 // no live account to dryRun apply against. Verify against a real control
 // plane before relying on the exact field names/bounds here.
 type AutoRotate struct {

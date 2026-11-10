@@ -7,5 +7,4 @@ terraform.tfstate.backup
 
 # Build artifacts
 /terraform-provider-truefoundry
-/live-validate
 /dist/

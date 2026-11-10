@@ -167,7 +167,7 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 					"token, since the whole point of rotation is for Terraform to pick up the new value — leave it " +
 					"unset (the common case) and the token is set once on create and left as-is on refresh, so a " +
 					"plan over many virtual accounts doesn't double its request count. Unverified against a real " +
-					"control plane — Staffbase does not use this feature yet.",
+					"control plane.",
 				Attributes: map[string]schema.Attribute{
 					"interval_days": schema.Int64Attribute{
 						Required:    true,

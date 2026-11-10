@@ -13,7 +13,7 @@ import (
 // with a Slack alert at 25% usage.
 const tenantBudgetConfigConfig = `
 resource "truefoundry_tenant_budget_config" "cluster" {
-  name = "devde1truefoundrydevelop"
+  name = "eu-cluster"
   mode = "enforce"
 
   limits = {
@@ -26,7 +26,7 @@ resource "truefoundry_tenant_budget_config" "cluster" {
 
   when = {
     metadata = {
-      tfy_gateway_cluster = { in = ["devde1truefoundrydevelop"] }
+      tfy_gateway_cluster = { in = ["eu-cluster"] }
     }
   }
 
@@ -70,7 +70,7 @@ func TestAccTenantBudgetConfig_lifecycle(t *testing.T) {
 			{
 				Config: providerConfig(host) + `
 resource "truefoundry_tenant_budget_config" "cluster" {
-  name = "devde1truefoundrydevelop"
+  name = "eu-cluster"
   mode = "audit"
 
   limits = {
@@ -84,7 +84,7 @@ resource "truefoundry_tenant_budget_config" "cluster" {
 
   when = {
     subjects = {
-      users = { not_in = ["falk@staffbase.com"] }
+      users = { not_in = ["jane.doe@example.com"] }
       teams = { in = ["platform"] }
     }
     models            = { in = ["gpt-4o"] }
@@ -97,7 +97,7 @@ resource "truefoundry_tenant_budget_config" "cluster" {
 					resource.TestCheckResourceAttr("truefoundry_tenant_budget_config.cluster", "limits.cost_per_day", "200"),
 					resource.TestCheckResourceAttr("truefoundry_tenant_budget_config.cluster", "limits.cost_per_month", "4000"),
 					resource.TestCheckNoResourceAttr("truefoundry_tenant_budget_config.cluster", "alerts.thresholds.#"),
-					resource.TestCheckTypeSetElemAttr("truefoundry_tenant_budget_config.cluster", "when.subjects.users.not_in.*", "falk@staffbase.com"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_tenant_budget_config.cluster", "when.subjects.users.not_in.*", "jane.doe@example.com"),
 					resource.TestCheckTypeSetElemAttr("truefoundry_tenant_budget_config.cluster", "when.provider_accounts.not_in.*", "openai-main"),
 				),
 			},
@@ -105,7 +105,7 @@ resource "truefoundry_tenant_budget_config" "cluster" {
 			{
 				Config: providerConfig(host) + `
 resource "truefoundry_tenant_budget_config" "cluster" {
-  name = "devde1truefoundrydevelop"
+  name = "eu-cluster"
   mode = "enforce"
 
   limits = {
@@ -116,7 +116,7 @@ resource "truefoundry_tenant_budget_config" "cluster" {
     type = "per-user"
     overrides = [
       {
-        users  = ["falk@staffbase.com"]
+        users  = ["jane.doe@example.com"]
         limits = { cost_per_day = 50 }
       },
     ]
@@ -157,7 +157,7 @@ func TestAccTenantBudgetConfig_import(t *testing.T) {
 				ResourceName:      "truefoundry_tenant_budget_config.cluster",
 				ImportState:       true,
 				ImportStateVerify: true,
-				ImportStateId:     "devde1truefoundrydevelop",
+				ImportStateId:     "eu-cluster",
 			},
 		},
 	})
@@ -172,7 +172,7 @@ func TestAccTenantBudgetConfig_recreatesAfterDrift(t *testing.T) {
 		Steps: []resource.TestStep{
 			{Config: providerConfig(host) + tenantBudgetConfigConfig},
 			{
-				PreConfig: func() { mock.DeleteBudgetByName("devde1truefoundrydevelop") },
+				PreConfig: func() { mock.DeleteBudgetByName("eu-cluster") },
 				Config:    providerConfig(host) + tenantBudgetConfigConfig,
 				Check:     resource.TestCheckResourceAttrSet("truefoundry_tenant_budget_config.cluster", "id"),
 			},
@@ -195,7 +195,7 @@ resource "truefoundry_team_budget_config" "platform" {
     type = "per-user"
     overrides = [
       {
-        users  = ["falk@staffbase.com"]
+        users  = ["jane.doe@example.com"]
         limits = { cost_per_day = 5 }
       },
     ]
@@ -225,7 +225,7 @@ func TestAccTeamBudgetConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_team_budget_config.platform", "id"),
 					resource.TestCheckResourceAttr("truefoundry_team_budget_config.platform", "team_name", "platform"),
 					resource.TestCheckResourceAttr("truefoundry_team_budget_config.platform", "limits.cost_per_month", "20"),
-					resource.TestCheckTypeSetElemAttr("truefoundry_team_budget_config.platform", "applies_to.overrides.0.users.*", "falk@staffbase.com"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_team_budget_config.platform", "applies_to.overrides.0.users.*", "jane.doe@example.com"),
 				),
 			},
 			// Changing the owning team replaces the rule.
@@ -245,7 +245,7 @@ resource "truefoundry_team_budget_config" "platform" {
     type = "per-user"
     overrides = [
       {
-        users  = ["falk@staffbase.com"]
+        users  = ["jane.doe@example.com"]
         limits = { cost_per_day = 5 }
       },
     ]

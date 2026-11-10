@@ -88,7 +88,7 @@ jobs:
             fi
           done < <(git log --no-merges --format=%s "$BASE_SHA..$HEAD_SHA")
           if [ "$status" -ne 0 ]; then
-            echo "Expected: type(optional-scope)!: subject — e.g. feat(DEVS-1432): add x"
+            echo "Expected: type(optional-scope)!: subject — e.g. feat(ABC-123): add x"
             exit 1
           fi
           echo "All commit messages OK"

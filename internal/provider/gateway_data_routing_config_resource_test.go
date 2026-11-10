@@ -23,20 +23,20 @@ resource "truefoundry_gateway_data_routing_config" "routing" {
 
   destinations = [
     {
-      name    = "devde1truefoundrydevelop"
+      name    = "eu-cluster"
       enabled = true
 
       when = [
         {
           field  = "metadata"
           key    = "tfy_gateway_cluster"
-          values = ["devde1truefoundrydevelop"]
+          values = ["eu-cluster"]
         },
       ]
 
       storage = {
         type                    = "customer-managed"
-        storage_integration_fqn = "tenant:azure:blobstorage:blob-storage:devde1truefoundrydevelop"
+        storage_integration_fqn = "tenant:azure:blobstorage:blob-storage:mystorageaccount"
       }
     },
   ]
@@ -61,13 +61,13 @@ func TestAccGatewayDataRoutingConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_data_routing_config.routing", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "default.storage.type", "controlplane-managed"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.storage.storage_integration_fqn", "tenant:azure:blobstorage:blob-storage:devde1truefoundrydevelop"),
+					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.storage.storage_integration_fqn", "tenant:azure:blobstorage:blob-storage:mystorageaccount"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*", map[string]string{
 						"field":    "metadata",
 						"key":      "tfy_gateway_cluster",
 						"values.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*.values.*", "devde1truefoundrydevelop"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*.values.*", "eu-cluster"),
 				),
 			},
 			// In-place update: pinned default region with retention, no

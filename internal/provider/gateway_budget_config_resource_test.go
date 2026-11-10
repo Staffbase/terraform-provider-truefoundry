@@ -17,12 +17,12 @@ resource "truefoundry_gateway_budget_config" "budget" {
 
   rules = [
     {
-      id       = "devde1truefoundrydevelop"
+      id       = "eu-cluster"
       limit_to = 150
       unit     = "cost_per_day"
 
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
 
       alerts = {
@@ -59,9 +59,9 @@ func TestAccGatewayBudgetConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_budget_config.budget", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_budget_config.budget", "rules.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{
-						"id":                                "devde1truefoundrydevelop",
+						"id":                                "eu-cluster",
 						"unit":                              "cost_per_day",
-						"when.metadata.tfy_gateway_cluster": "devde1truefoundrydevelop",
+						"when.metadata.tfy_gateway_cluster": "eu-cluster",
 						"alerts.thresholds.#":               "1",
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_budget_config.budget", "rules.*.alerts.thresholds.*", "25"),
@@ -76,11 +76,11 @@ resource "truefoundry_gateway_budget_config" "budget" {
 
   rules = [
     {
-      id       = "devde1truefoundrydevelop"
+      id       = "eu-cluster"
       limit_to = 200
       unit     = "cost_per_day"
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
     },
     {
@@ -100,7 +100,7 @@ resource "truefoundry_gateway_budget_config" "budget" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_gateway_budget_config.budget", "rules.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{
-						"id":       "devde1truefoundrydevelop",
+						"id":       "eu-cluster",
 						"limit_to": "200",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{

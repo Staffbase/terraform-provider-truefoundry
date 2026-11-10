@@ -44,7 +44,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0022
         output = 0.0088
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
   ]
 }
@@ -61,7 +61,7 @@ resource "truefoundry_provider_account" "azure" {
 						"model_types.#":         "2",
 						"authorized_subjects.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.azure", "models.*.authorized_subjects.*", "user:falk@staffbase.com"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.azure", "models.*.authorized_subjects.*", "user:jane.doe@example.com"),
 				),
 			},
 			// In-place update: bump the API version, change the cost, and add
@@ -87,7 +87,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0025
         output = 0.01
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
     {
       name        = "embeddings"
@@ -152,7 +152,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0025
         output = 0.01
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
   ]
 }

@@ -94,7 +94,7 @@ resource "truefoundry_gateway_data_access_config" "access" {
         {
           field  = "metadata"
           key    = "tfy_gateway_cluster"
-          values = ["devde1truefoundrydevelop"]
+          values = ["eu-cluster"]
         },
         {
           field  = "created_by"

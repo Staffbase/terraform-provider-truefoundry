@@ -19,9 +19,9 @@ resource "truefoundry_azure_account" "storage" {
 
   blob_storages = [
     {
-      name              = "devde1truefoundrydevelop"
-      storage_root      = "https://devde1truefoundrydevelop.blob.core.windows.net/devde1truefoundrydevelop/tfy-managed-storage/staffbase"
-      connection_string = "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value"
+      name              = "mystorageaccount"
+      storage_root      = "https://mystorageaccount.blob.core.windows.net/mycontainer/tfy-managed-storage"
+      connection_string = "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/mystorageaccount/value"
     },
   ]
 }
@@ -45,8 +45,8 @@ func TestAccAzureAccount_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "fqn", mockcp.Tenant+":azure:spike-blobstorage"),
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_azure_account.storage", "blob_storages.*", map[string]string{
-						"name":              "devde1truefoundrydevelop",
-						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value",
+						"name":              "mystorageaccount",
+						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/mystorageaccount/value",
 					}),
 					resource.TestCheckNoResourceAttr("truefoundry_azure_account.storage", "subscription_id"),
 				),
@@ -61,9 +61,9 @@ resource "truefoundry_azure_account" "storage" {
 
   blob_storages = [
     {
-      name              = "devde1truefoundrydevelop"
-      storage_root      = "https://devde1truefoundrydevelop.blob.core.windows.net/devde1truefoundrydevelop/tfy-managed-storage/staffbase"
-      connection_string = "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value"
+      name              = "mystorageaccount"
+      storage_root      = "https://mystorageaccount.blob.core.windows.net/mycontainer/tfy-managed-storage"
+      connection_string = "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/mystorageaccount/value"
     },
     {
       name                = "public-assets"
@@ -77,8 +77,8 @@ resource "truefoundry_azure_account" "storage" {
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "subscription_id", "00000000-1111-2222-3333-444444444444"),
 					resource.TestCheckResourceAttr("truefoundry_azure_account.storage", "blob_storages.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_azure_account.storage", "blob_storages.*", map[string]string{
-						"name":              "devde1truefoundrydevelop",
-						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/devde1truefoundrydevelop/value",
+						"name":              "mystorageaccount",
+						"connection_string": "tenant:hashicorp:vault-secrets:secret-store:vault::blobstorage/mystorageaccount/value",
 					}),
 					// The second container has authorized subjects but no
 					// connection string (absence is not addressable in sets).
@@ -98,8 +98,8 @@ resource "truefoundry_azure_account" "storage" {
 
   blob_storages = [
     {
-      name         = "devde1truefoundrydevelop"
-      storage_root = "https://devde1truefoundrydevelop.blob.core.windows.net/devde1truefoundrydevelop/tfy-managed-storage/staffbase"
+      name         = "mystorageaccount"
+      storage_root = "https://mystorageaccount.blob.core.windows.net/mycontainer/tfy-managed-storage"
     },
   ]
 }

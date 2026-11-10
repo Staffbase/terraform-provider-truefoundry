@@ -20,7 +20,7 @@ resource "truefoundry_guardrail_group" "region" {
 
   collaborators = [
     {
-      subject = "user:falk@staffbase.com"
+      subject = "user:jane.doe@example.com"
       role_id = "provider-account-manager"
     },
   ]
@@ -78,7 +78,7 @@ func TestAccGuardrailGroup_lifecycle(t *testing.T) {
 						"type": "azure-prompt-shield",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_guardrail_group.region", "collaborators.*", map[string]string{
-						"subject": "user:falk@staffbase.com",
+						"subject": "user:jane.doe@example.com",
 						"role_id": "provider-account-manager",
 					}),
 				),

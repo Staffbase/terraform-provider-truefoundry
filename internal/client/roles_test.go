@@ -49,7 +49,7 @@ func TestRolePermissions_MarshalsAsArray(t *testing.T) {
 }
 
 // A built-in role with a string permission must not break reading the others
-// (seen on the TrueFoundry Cloud control plane, DEVS-1633).
+// (seen on the TrueFoundry Cloud control plane).
 func TestGetRole_ToleratesStringPermissionsOnOtherRoles(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -21,8 +21,8 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 
       when = {
         models = [
-          "dev-de1-001-francecentral/gpt-4.1",
-          "dev-de1-001-francecentral/gpt-4o",
+          "azure-france/gpt-4.1",
+          "azure-france/gpt-4o",
         ]
       }
 
@@ -67,8 +67,8 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 
       when = {
         models = [
-          "dev-de1-001-francecentral/gpt-4o",
-          "dev-de1-001-francecentral/gpt-4.1",
+          "azure-france/gpt-4o",
+          "azure-france/gpt-4.1",
         ]
       }
 
@@ -111,7 +111,7 @@ func TestAccGatewayRateLimitingConfig_lifecycle(t *testing.T) {
 						"unit":            "tokens_per_day",
 						"when.subjects.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.models.*", "dev-de1-001-francecentral/gpt-4o"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.models.*", "azure-france/gpt-4o"),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.subjects.*", "team:everyone"),
 				),
 			},
@@ -133,7 +133,7 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
       id = "per-app-cap"
 
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
 
       limit_to               = 120
@@ -149,7 +149,7 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 						"id":                                "per-app-cap",
 						"limit_to":                          "120",
 						"unit":                              "requests_per_hour",
-						"when.metadata.tfy_gateway_cluster": "devde1truefoundrydevelop",
+						"when.metadata.tfy_gateway_cluster": "eu-cluster",
 						"rate_limit_applies_per.#":          "2",
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.rate_limit_applies_per.*", "metadata.appId"),

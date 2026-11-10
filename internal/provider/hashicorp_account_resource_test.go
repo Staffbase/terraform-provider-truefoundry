@@ -20,7 +20,7 @@ resource "truefoundry_hashicorp_account" "secrets" {
   vaults = [
     {
       name          = "vault"
-      vault_url     = "https://vault.staffbase.com"
+      vault_url     = "https://vault.example.com"
       kv_mount_path = "de1/dev"
       root_path     = "tfy-control-plane"
       approle = {
@@ -66,7 +66,7 @@ resource "truefoundry_hashicorp_account" "secrets" {
   vaults = [
     {
       name          = "vault"
-      vault_url     = "https://vault.staffbase.com"
+      vault_url     = "https://vault.example.com"
       kv_mount_path = "de1/dev"
       root_path     = "tfy-control-plane"
       namespace     = "team-a"
@@ -74,7 +74,7 @@ resource "truefoundry_hashicorp_account" "secrets" {
     },
     {
       name                = "vault-eu"
-      vault_url           = "https://vault-eu.staffbase.com"
+      vault_url           = "https://vault-eu.example.com"
       kv_mount_path       = "eu1/dev"
       token               = "hvs.YYYYYYYYYYYYYYYYYYYY"
       authorized_subjects = ["team:everyone"]
@@ -128,7 +128,7 @@ resource "truefoundry_hashicorp_account" "secrets" {
   vaults = [
     {
       name          = "vault"
-      vault_url     = "https://vault.staffbase.com"
+      vault_url     = "https://vault.example.com"
       kv_mount_path = "de1/dev"
       root_path     = "tfy-control-plane"
       approle = {

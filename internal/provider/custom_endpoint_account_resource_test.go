@@ -105,7 +105,7 @@ resource "truefoundry_custom_endpoint_account" "speech" {
         "Ocp-Apim-Subscription-Key" = "tenant:hashicorp:vault-secrets:secret-store:vault::docintel/value"
       }
       headers             = { "X-Custom-Header" = "value" }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
       tls = {
         reject_unauthorized = true
       }
@@ -121,7 +121,7 @@ resource "truefoundry_custom_endpoint_account" "speech" {
 						"tls.reject_unauthorized": "true",
 						"authorized_subjects.#":   "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_custom_endpoint_account.speech", "endpoints.*.authorized_subjects.*", "user:falk@staffbase.com"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_custom_endpoint_account.speech", "endpoints.*.authorized_subjects.*", "user:jane.doe@example.com"),
 					resource.TestCheckNoResourceAttr("truefoundry_custom_endpoint_account.speech", "routing_type"),
 				),
 			},

@@ -25,7 +25,7 @@ resource "truefoundry_gateway_otel_config" "otel" {
     when = [
       {
         key   = "tfy_gateway_cluster"
-        value = ["devde1truefoundrydevelop"]
+        value = ["eu-cluster"]
       },
     ]
   }
