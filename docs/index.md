@@ -41,7 +41,7 @@ AI Gateway resources on a TrueFoundry control plane:
 terraform {
   required_providers {
     truefoundry = {
-      source = "terraform.staffbase.com/staffbase/truefoundry"
+      source = "staffbase/truefoundry"
     }
   }
 }

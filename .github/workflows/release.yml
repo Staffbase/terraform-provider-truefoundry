@@ -11,7 +11,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
-      # goreleaser creates the GitHub release
+      # goreleaser publishes the GitHub release, which the Terraform Registry ingests
       contents: write
 
     steps:
@@ -44,9 +44,3 @@ jobs:
         env:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish to Terraform Enterprise private registry
-        run: ./scripts/publish-tfe.sh
-        env:
-          TFE_TOKEN: ${{ secrets.TFE_TOKEN }}
-          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}

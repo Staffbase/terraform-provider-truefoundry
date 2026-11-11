@@ -31,18 +31,15 @@ It is not an official TrueFoundry product. Contributions are welcome — see
 
 ## Getting started
 
-Releases are published to the Staffbase Terraform Enterprise private registry
-(`terraform.staffbase.com/staffbase/truefoundry`) and as
-[GitHub releases](https://github.com/Staffbase/terraform-provider-truefoundry/releases).
-Until the provider is available on the public Terraform Registry, outside
-users can build it from source and use a `dev_overrides` CLI config (see
-[Development](#development)).
+Releases are published to the public
+[Terraform Registry](https://registry.terraform.io/providers/staffbase/truefoundry)
+as `staffbase/truefoundry`.
 
 ```hcl
 terraform {
   required_providers {
     truefoundry = {
-      source = "terraform.staffbase.com/staffbase/truefoundry"
+      source = "staffbase/truefoundry"
     }
   }
 }
@@ -407,7 +404,7 @@ go run ./cmd/mock-control-plane &                # mock control plane on :8330
 go build -o /tmp/tfy-bin/terraform-provider-truefoundry .
 cat > /tmp/dev.tfrc <<'EOF'
 provider_installation {
-  dev_overrides { "terraform.staffbase.com/staffbase/truefoundry" = "/tmp/tfy-bin" }
+  dev_overrides { "staffbase/truefoundry" = "/tmp/tfy-bin" }
   direct {}
 }
 EOF
@@ -416,8 +413,9 @@ cd examples/demo && TF_CLI_CONFIG_FILE=/tmp/dev.tfrc terraform apply
 
 ## Releasing
 
-Pushing a `v*` tag builds, signs, and publishes the provider to the
-Terraform Enterprise private registry — see [RELEASING.md](RELEASING.md).
+Pushing a `v*` tag builds and signs the provider and publishes the GitHub
+release, which the public Terraform Registry picks up — see
+[RELEASING.md](RELEASING.md).
 
 ## Contributing
 
