@@ -1,47 +1,75 @@
 # Providers are consumed with semver constraints (e.g. `~> 0.1`), so unlike
 # the calver used by service repos, the version is resolved from PR labels.
-# `major`/`minor`/`patch` are the org-wide labels and act as aliases for the
-# semantic ones. See AGENTS.md "Pull requests" for when to use which.
+# See AGENTS.md "Pull requests" for when to use which label.
+#
+# Dependabot adds the org-wide `major`/`minor`/`patch` labels on its own
+# (dependabot.yml cannot turn that off), and release-drafter has no label
+# negation. So those aliases only drive version resolution, where
+# `dependencies` is matched first and stops them from applying.
 name-template: "v$RESOLVED_VERSION"
 tag-template: "v$RESOLVED_VERSION"
 
 categories:
-  # First match wins, so `breaking` outranks the rest.
+  # Changelog sections. `exclusive` makes the first match win, so a PR lands
+  # in one section only (`breaking` + `feature` -> Breaking Changes).
   - title: "💥 Breaking Changes"
     semver-increment: "major"
+    exclusive: true
     when:
-      labels:
-        - "breaking"
-        - "major"
+      label: "breaking"
   - title: "🚀 Features"
     semver-increment: "minor"
+    exclusive: true
     when:
       labels:
         - "feature"
         - "enhancement"
-        - "minor"
   - title: "🐛 Bug Fixes"
     semver-increment: "patch"
+    exclusive: true
     when:
       labels:
         - "fix"
         - "bug"
   - title: "📖 Documentation"
     semver-increment: "patch"
+    exclusive: true
     when:
-      labels:
-        - "documentation"
+      label: "documentation"
   - title: "🧰 Maintenance"
     semver-increment: "patch"
+    exclusive: true
     when:
       labels:
         - "chore"
         - "dependencies"
         - "patch"
+  # Receives unlabelled PRs and PRs labelled only with a `major`/`minor` alias.
+  - title: "📦 Other Changes"
+    semver-increment: "patch"
+
   - type: "pre-exclude"
     when:
       label: "skip-changelog"
-  # Fallback bump for a PR matching none of the above (no rendered section).
+
+  # Version resolution for the aliases. The highest increment across these
+  # and the changelog sections wins.
+  - type: "version-resolver"
+    semver-increment: "patch"
+    exclusive: true
+    when:
+      label: "dependencies"
+  - type: "version-resolver"
+    semver-increment: "major"
+    exclusive: true
+    when:
+      label: "major"
+  - type: "version-resolver"
+    semver-increment: "minor"
+    exclusive: true
+    when:
+      label: "minor"
+  # Fallback bump for a PR matching none of the above.
   - type: "version-resolver"
     semver-increment: "patch"
 

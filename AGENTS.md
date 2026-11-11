@@ -143,18 +143,19 @@ Commit prefixes do not drive releases: version and changelog come from **PR labe
 
 Draft PRs (`gh pr create --draft`), fill in `.github/pull_request_template.md`, under 200 words, never list changed files.
 
-**Every PR needs a label**: consumers use semver constraints (`~> 0.2`) and release-drafter derives version + changelog from labels only. Unlabelled = no changelog section, patch bump.
+**Every PR needs a label**: consumers use semver constraints (`~> 0.2`) and release-drafter derives version + changelog from labels only. Unlabelled = Other Changes, patch bump.
 
 | Label | Bump | Section |
 | --- | --- | --- |
-| `breaking`, `major` | major | Breaking Changes |
-| `feature`, `enhancement`, `minor` | minor | Features |
+| `breaking` | major | Breaking Changes |
+| `feature`, `enhancement` | minor | Features |
 | `fix`, `bug` | patch | Bug Fixes |
 | `documentation` | patch | Documentation |
 | `chore`, `dependencies`, `patch` | patch | Maintenance |
+| `major` / `minor` (aliases) | major / minor, ignored with `dependencies` | section of the other labels, else Other Changes |
 | `skip-changelog` | patch | excluded |
 
-First matching category wins (`breaking` + `feature` → Breaking Changes). Pick by practitioner-visible Terraform surface, not diff size:
+First matching section wins (`breaking` + `feature` → Breaking Changes). Dependabot adds `major`/`minor` itself, so these aliases never bump a `dependencies` PR. Pick by practitioner-visible Terraform surface, not diff size:
 
 - `breaking`: renamed/removed attribute or resource, new required field, changed default, anything forcing replacement or failing existing configs.
 - `feature`: new resource, data source, provider type, or optional attribute.
