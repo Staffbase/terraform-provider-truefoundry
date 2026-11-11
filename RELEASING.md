@@ -14,22 +14,13 @@ to date on every push to `main`; the next version is resolved from PR labels
 (`breaking` → major, `feature`/`enhancement` → minor, everything else →
 patch).
 
-To release:
-
-1. Open the [draft release](https://github.com/Staffbase/terraform-provider-truefoundry/releases)
-   and review the notes and the version. **Do not click Publish**: the
-   registry would ingest the release before its artifacts are attached and
-   fail.
-2. Push the tag shown in the draft:
-
-   ```sh
-   git checkout main && git pull
-   git tag v0.15.0
-   git push origin v0.15.0
-   ```
-
-3. Watch the *Release* workflow. goreleaser uploads the artifacts to the
-   draft (`use_existing_draft`) and publishes it once all are attached.
+To release, open the [draft release](https://github.com/Staffbase/terraform-provider-truefoundry/releases),
+review the notes and the version, and click **Publish** (or push the tag
+shown in the draft). Either way the *Release* workflow starts. A release
+published in the UI has no artifacts yet, so the workflow turns it back into
+a draft first; goreleaser then uploads the signed artifacts to it
+(`use_existing_draft`) and publishes it again. The registry ingests on that
+second publish.
 
 The version shows up on the registry within a few minutes. If it does not,
 open the provider's settings on the registry and click **Resync**, and check

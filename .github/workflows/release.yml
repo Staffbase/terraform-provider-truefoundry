@@ -36,6 +36,19 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
+      # Publishing the release-drafter draft in the UI creates the tag and
+      # starts this run with a published release that has no artifacts yet.
+      # Turn it back into a draft so goreleaser reuses it and publishes it
+      # again once the signed artifacts are attached: the Terraform Registry
+      # ingests on publish and fails on a release without them.
+      - name: Return published release to draft
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .id >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --draft=true
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
         with:
