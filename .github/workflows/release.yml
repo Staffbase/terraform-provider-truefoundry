@@ -41,9 +41,23 @@ jobs:
       # Turn it back into a draft so goreleaser reuses it and publishes it
       # again once the signed artifacts are attached: the Terraform Registry
       # ingests on publish and fails on a release without them.
+      # A published release with artifacts is a finished release (e.g. a
+      # re-run): redrafting it would hide its assets from the registry.
       - name: Return published release to draft
         run: |
-          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .id >/dev/null 2>&1; then
+          err="$RUNNER_TEMP/release-view.err"
+          if ! info=$(gh release view "$GITHUB_REF_NAME" --json isDraft,assets \
+              --jq '"\(.isDraft) \(.assets | length)"' 2>"$err"); then
+            grep -q "release not found" "$err" && exit 0
+            cat "$err" >&2
+            exit 1
+          fi
+          read -r is_draft assets <<<"$info"
+          if [ "$is_draft" = false ] && [ "$assets" -gt 0 ]; then
+            echo "::error::$GITHUB_REF_NAME is already published with artifacts"
+            exit 1
+          fi
+          if [ "$is_draft" = false ]; then
             gh release edit "$GITHUB_REF_NAME" --draft=true
           fi
         env:

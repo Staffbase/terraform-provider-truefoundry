@@ -22,6 +22,10 @@ a draft first; goreleaser then uploads the signed artifacts to it
 (`use_existing_draft`) and publishes it again. The registry ingests on that
 second publish.
 
+If the workflow fails, re-run it from the Actions tab. Do not click
+**Publish** on a draft whose tag already exists: that starts no run, and the
+release goes public without artifacts.
+
 The version shows up on the registry within a few minutes. If it does not,
 open the provider's settings on the registry and click **Resync**, and check
 the registry's email to the publishing account for ingestion errors.
