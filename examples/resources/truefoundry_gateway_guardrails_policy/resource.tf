@@ -1,19 +1,19 @@
 # One named policy per target region; policies coexist on the control plane.
 # Create the referenced integrations with truefoundry_guardrail_group first.
 resource "truefoundry_gateway_guardrails_policy" "region" {
-  name = "dev-de1-001-gr-frc"
+  name = "guardrails-france"
 
   when = {
     target = {
       model = {
         condition = "in"
-        values    = ["dev-de1-001-francecentral/gpt-5-mini"]
+        values    = ["azure-france/gpt-5-mini"]
       }
     }
   }
 
-  llm_input_guardrails  = ["dev-de1-001-gr-frc/dev-de1-001-cs-frc"]
-  llm_output_guardrails = ["dev-de1-001-gr-frc/dev-de1-001-cs-frc"]
+  llm_input_guardrails  = ["guardrails-france/content-safety-france"]
+  llm_output_guardrails = ["guardrails-france/content-safety-france"]
   custom_error_message  = "Request blocked by content safety."
 
   # Omit unused hook lists rather than assigning []. For MCP targets use

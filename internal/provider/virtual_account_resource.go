@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider
 
 import (
@@ -167,7 +181,7 @@ func (r *virtualAccountResource) Schema(_ context.Context, _ resource.SchemaRequ
 					"token, since the whole point of rotation is for Terraform to pick up the new value — leave it " +
 					"unset (the common case) and the token is set once on create and left as-is on refresh, so a " +
 					"plan over many virtual accounts doesn't double its request count. Unverified against a real " +
-					"control plane — Staffbase does not use this feature yet.",
+					"control plane.",
 				Attributes: map[string]schema.Attribute{
 					"interval_days": schema.Int64Attribute{
 						Required:    true,

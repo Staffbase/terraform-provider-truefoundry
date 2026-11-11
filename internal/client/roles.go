@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package client
 
 import (
@@ -32,7 +46,7 @@ type RoleManifest struct {
 // RolePermissions is the permission list of a role. The list endpoint returns
 // every role of the tenant, and on the TrueFoundry Cloud control plane at least
 // one built-in role carries its permissions as a single JSON string instead of
-// an array (DEVS-1633, 2026-11-03: "cannot unmarshal string into Go struct field
+// an array (2026-11-03: "cannot unmarshal string into Go struct field
 // RoleManifest.manifest.permissions of type []string"). One such role made every
 // role read fail, so a string decodes to a one-element list (an empty string to
 // an empty list). Encoding is unchanged: always an array.

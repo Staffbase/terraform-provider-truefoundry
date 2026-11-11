@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package client
 
 import (
@@ -29,7 +43,7 @@ type SecretStoreConfig struct {
 // virtual account. Its presence in the manifest is what activates rotation;
 // there is no separate enabled flag. Shape per the published
 // truefoundry-typescript-sdk / API docs (2026-09-10) — unverified against a
-// real control plane: Staffbase does not use this feature yet, so there is
+// real control plane: no live account with rotation was available, so there is
 // no live account to dryRun apply against. Verify against a real control
 // plane before relying on the exact field names/bounds here.
 type AutoRotate struct {

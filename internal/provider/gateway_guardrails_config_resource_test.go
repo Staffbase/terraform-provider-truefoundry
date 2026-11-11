@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -17,40 +31,40 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
 
   rules = [
     {
-      id = "dev-de1-001-gr-francecentral"
+      id = "guardrails-france"
 
       when = {
         target = {
           model = {
             condition = "in"
             values = [
-              "dev-de1-001-francecentral/gpt-4.1",
-              "dev-de1-001-francecentral/gpt-4o",
+              "azure-france/gpt-4.1",
+              "azure-france/gpt-4o",
             ]
           }
         }
       }
 
-      llm_input_guardrails  = ["dev-de1-001-gr-francecentral/dev-de1-001-cs-francecentral"]
-      llm_output_guardrails = ["dev-de1-001-gr-francecentral/dev-de1-001-cs-francecentral"]
+      llm_input_guardrails  = ["guardrails-france/content-safety-france"]
+      llm_output_guardrails = ["guardrails-france/content-safety-france"]
     },
     {
-      id = "dev-de1-001-gr-swedencentral"
+      id = "guardrails-sweden"
 
       when = {
         target = {
           model = {
             condition = "in"
             values = [
-              "dev-de1-001-swedencentral/gpt-4.1",
-              "dev-de1-001-swedencentral/gpt-4o",
+              "azure-sweden/gpt-4.1",
+              "azure-sweden/gpt-4o",
             ]
           }
         }
       }
 
-      llm_input_guardrails  = ["dev-de1-001-gr-swedencentral/dev-de1-001-cs-swedencentral"]
-      llm_output_guardrails = ["dev-de1-001-gr-swedencentral/dev-de1-001-cs-swedencentral"]
+      llm_input_guardrails  = ["guardrails-sweden/content-safety-sweden"]
+      llm_output_guardrails = ["guardrails-sweden/content-safety-sweden"]
     },
   ]
 }
@@ -65,40 +79,40 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
 
   rules = [
     {
-      id = "dev-de1-001-gr-swedencentral"
+      id = "guardrails-sweden"
 
       when = {
         target = {
           model = {
             condition = "in"
             values = [
-              "dev-de1-001-swedencentral/gpt-4o",
-              "dev-de1-001-swedencentral/gpt-4.1",
+              "azure-sweden/gpt-4o",
+              "azure-sweden/gpt-4.1",
             ]
           }
         }
       }
 
-      llm_input_guardrails  = ["dev-de1-001-gr-swedencentral/dev-de1-001-cs-swedencentral"]
-      llm_output_guardrails = ["dev-de1-001-gr-swedencentral/dev-de1-001-cs-swedencentral"]
+      llm_input_guardrails  = ["guardrails-sweden/content-safety-sweden"]
+      llm_output_guardrails = ["guardrails-sweden/content-safety-sweden"]
     },
     {
-      id = "dev-de1-001-gr-francecentral"
+      id = "guardrails-france"
 
       when = {
         target = {
           model = {
             condition = "in"
             values = [
-              "dev-de1-001-francecentral/gpt-4o",
-              "dev-de1-001-francecentral/gpt-4.1",
+              "azure-france/gpt-4o",
+              "azure-france/gpt-4.1",
             ]
           }
         }
       }
 
-      llm_input_guardrails  = ["dev-de1-001-gr-francecentral/dev-de1-001-cs-francecentral"]
-      llm_output_guardrails = ["dev-de1-001-gr-francecentral/dev-de1-001-cs-francecentral"]
+      llm_input_guardrails  = ["guardrails-france/content-safety-france"]
+      llm_output_guardrails = ["guardrails-france/content-safety-france"]
     },
   ]
 }
@@ -122,14 +136,14 @@ func TestAccGatewayGuardrailsConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_guardrails_config.guardrails", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_guardrails_config.guardrails", "rules.*", map[string]string{
-						"id":                          "dev-de1-001-gr-francecentral",
+						"id":                          "guardrails-france",
 						"when.target.model.condition": "in",
 						"when.target.model.values.#":  "2",
 						"llm_input_guardrails.#":      "1",
-						"llm_input_guardrails.0":      "dev-de1-001-gr-francecentral/dev-de1-001-cs-francecentral",
+						"llm_input_guardrails.0":      "guardrails-france/content-safety-france",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.*.when.target.model.values.*", "dev-de1-001-francecentral/gpt-4o"),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.*.when.target.model.values.*", "dev-de1-001-swedencentral/gpt-4.1"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.*.when.target.model.values.*", "azure-france/gpt-4o"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.*.when.target.model.values.*", "azure-sweden/gpt-4.1"),
 				),
 			},
 			// Regression: listing the same rules and model values in a
@@ -155,7 +169,7 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
           operator = "or"
           in       = ["team:everyone"]
         }
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
 
       llm_input_guardrails = ["region-guardrails/prompt-shield"]
@@ -191,7 +205,7 @@ resource "truefoundry_gateway_guardrails_config" "guardrails" {
 						"id":                                "everyone-prompt-shield",
 						"custom_error_message":              "Request blocked by prompt shield.",
 						"when.subjects.in.#":                "1",
-						"when.metadata.tfy_gateway_cluster": "devde1truefoundrydevelop",
+						"when.metadata.tfy_gateway_cluster": "eu-cluster",
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_guardrails_config.guardrails", "rules.*.when.subjects.in.*", "team:everyone"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_guardrails_config.guardrails", "rules.*", map[string]string{

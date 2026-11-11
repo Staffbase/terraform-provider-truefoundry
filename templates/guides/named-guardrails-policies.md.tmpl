@@ -51,7 +51,7 @@ the API, using empty arrays for unused hooks.
 4. Import each existing named policy by its name, for example:
 
    ```sh
-   terraform import truefoundry_gateway_guardrails_policy.region dev-de1-001-gr-frc
+   terraform import truefoundry_gateway_guardrails_policy.region guardrails-france
    ```
 
 5. Review `terraform plan`. Existing policies should need no changes except

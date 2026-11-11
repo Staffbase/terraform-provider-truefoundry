@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -44,7 +58,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0022
         output = 0.0088
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
   ]
 }
@@ -61,7 +75,7 @@ resource "truefoundry_provider_account" "azure" {
 						"model_types.#":         "2",
 						"authorized_subjects.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.azure", "models.*.authorized_subjects.*", "user:falk@staffbase.com"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_provider_account.azure", "models.*.authorized_subjects.*", "user:jane.doe@example.com"),
 				),
 			},
 			// In-place update: bump the API version, change the cost, and add
@@ -87,7 +101,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0025
         output = 0.01
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
     {
       name        = "embeddings"
@@ -152,7 +166,7 @@ resource "truefoundry_provider_account" "azure" {
         input  = 0.0025
         output = 0.01
       }
-      authorized_subjects = ["user:falk@staffbase.com"]
+      authorized_subjects = ["user:jane.doe@example.com"]
     },
   ]
 }

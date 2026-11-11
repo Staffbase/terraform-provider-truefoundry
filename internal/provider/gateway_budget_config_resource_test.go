@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -17,12 +31,12 @@ resource "truefoundry_gateway_budget_config" "budget" {
 
   rules = [
     {
-      id       = "devde1truefoundrydevelop"
+      id       = "eu-cluster"
       limit_to = 150
       unit     = "cost_per_day"
 
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
 
       alerts = {
@@ -59,9 +73,9 @@ func TestAccGatewayBudgetConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_budget_config.budget", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_budget_config.budget", "rules.#", "1"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{
-						"id":                                "devde1truefoundrydevelop",
+						"id":                                "eu-cluster",
 						"unit":                              "cost_per_day",
-						"when.metadata.tfy_gateway_cluster": "devde1truefoundrydevelop",
+						"when.metadata.tfy_gateway_cluster": "eu-cluster",
 						"alerts.thresholds.#":               "1",
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_budget_config.budget", "rules.*.alerts.thresholds.*", "25"),
@@ -76,11 +90,11 @@ resource "truefoundry_gateway_budget_config" "budget" {
 
   rules = [
     {
-      id       = "devde1truefoundrydevelop"
+      id       = "eu-cluster"
       limit_to = 200
       unit     = "cost_per_day"
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
     },
     {
@@ -100,7 +114,7 @@ resource "truefoundry_gateway_budget_config" "budget" {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("truefoundry_gateway_budget_config.budget", "rules.#", "2"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{
-						"id":       "devde1truefoundrydevelop",
+						"id":       "eu-cluster",
 						"limit_to": "200",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_budget_config.budget", "rules.*", map[string]string{

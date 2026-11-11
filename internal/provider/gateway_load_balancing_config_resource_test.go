@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -21,16 +35,16 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
       type = "weight-based-routing"
 
       when = {
-        models = ["dev-de1-001-francecentral/gpt-4o"]
+        models = ["azure-france/gpt-4o"]
       }
 
       load_balance_targets = [
         {
-          target = "dev-de1-001-francecentral/gpt-4o"
+          target = "azure-france/gpt-4o"
           weight = 70
         },
         {
-          target                = "dev-de1-001-swedencentral/gpt-4o"
+          target                = "azure-sweden/gpt-4o"
           weight                = 30
           fallback_status_codes = ["429", "503"]
           fallback_candidate    = true
@@ -47,11 +61,11 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 
       load_balance_targets = [
         {
-          target   = "dev-de1-001-francecentral/gpt-4.1"
+          target   = "azure-france/gpt-4.1"
           priority = 0
         },
         {
-          target   = "dev-de1-001-swedencentral/gpt-4.1"
+          target   = "azure-sweden/gpt-4.1"
           priority = 1
         },
       ]
@@ -78,11 +92,11 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 
       load_balance_targets = [
         {
-          target   = "dev-de1-001-swedencentral/gpt-4.1"
+          target   = "azure-sweden/gpt-4.1"
           priority = 1
         },
         {
-          target   = "dev-de1-001-francecentral/gpt-4.1"
+          target   = "azure-france/gpt-4.1"
           priority = 0
         },
       ]
@@ -92,18 +106,18 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
       type = "weight-based-routing"
 
       when = {
-        models = ["dev-de1-001-francecentral/gpt-4o"]
+        models = ["azure-france/gpt-4o"]
       }
 
       load_balance_targets = [
         {
-          target                = "dev-de1-001-swedencentral/gpt-4o"
+          target                = "azure-sweden/gpt-4o"
           weight                = 30
           fallback_status_codes = ["503", "429"]
           fallback_candidate    = true
         },
         {
-          target = "dev-de1-001-francecentral/gpt-4o"
+          target = "azure-france/gpt-4o"
           weight = 70
         },
       ]
@@ -136,7 +150,7 @@ func TestAccGatewayLoadBalancingConfig_lifecycle(t *testing.T) {
 						"load_balance_targets.#": "2",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_load_balancing_config.routing", "rules.*.load_balance_targets.*", map[string]string{
-						"target":                  "dev-de1-001-swedencentral/gpt-4o",
+						"target":                  "azure-sweden/gpt-4o",
 						"weight":                  "30",
 						"fallback_candidate":      "true",
 						"fallback_status_codes.#": "2",
@@ -147,7 +161,7 @@ func TestAccGatewayLoadBalancingConfig_lifecycle(t *testing.T) {
 						"when.subjects.#": "1",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_load_balancing_config.routing", "rules.*.load_balance_targets.*", map[string]string{
-						"target":   "dev-de1-001-francecentral/gpt-4.1",
+						"target":   "azure-france/gpt-4.1",
 						"priority": "0",
 					}),
 				),
@@ -173,7 +187,7 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 
       load_balance_targets = [
         {
-          target = "dev-de1-001-francecentral/gpt-4o"
+          target = "azure-france/gpt-4o"
 
           headers_override = {
             remove = ["x-internal-trace"]
@@ -181,7 +195,7 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
           }
         },
         {
-          target         = "dev-de1-001-swedencentral/gpt-4o"
+          target         = "azure-sweden/gpt-4o"
           metadata_match = { region = "eu-north" }
         },
       ]
@@ -197,12 +211,12 @@ resource "truefoundry_gateway_load_balancing_config" "routing" {
 						"load_balance_targets.#": "2",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_load_balancing_config.routing", "rules.*.load_balance_targets.*", map[string]string{
-						"target":                           "dev-de1-001-francecentral/gpt-4o",
+						"target":                           "azure-france/gpt-4o",
 						"headers_override.remove.#":        "1",
 						"headers_override.set.x-routed-by": "terraform",
 					}),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_load_balancing_config.routing", "rules.*.load_balance_targets.*", map[string]string{
-						"target":                "dev-de1-001-swedencentral/gpt-4o",
+						"target":                "azure-sweden/gpt-4o",
 						"metadata_match.region": "eu-north",
 					}),
 				),

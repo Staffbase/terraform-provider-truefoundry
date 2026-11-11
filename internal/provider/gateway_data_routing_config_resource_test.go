@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -23,20 +37,20 @@ resource "truefoundry_gateway_data_routing_config" "routing" {
 
   destinations = [
     {
-      name    = "devde1truefoundrydevelop"
+      name    = "eu-cluster"
       enabled = true
 
       when = [
         {
           field  = "metadata"
           key    = "tfy_gateway_cluster"
-          values = ["devde1truefoundrydevelop"]
+          values = ["eu-cluster"]
         },
       ]
 
       storage = {
         type                    = "customer-managed"
-        storage_integration_fqn = "tenant:azure:blobstorage:blob-storage:devde1truefoundrydevelop"
+        storage_integration_fqn = "tenant:azure:blobstorage:blob-storage:mystorageaccount"
       }
     },
   ]
@@ -61,13 +75,13 @@ func TestAccGatewayDataRoutingConfig_lifecycle(t *testing.T) {
 					resource.TestCheckResourceAttrSet("truefoundry_gateway_data_routing_config.routing", "id"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "default.storage.type", "controlplane-managed"),
 					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.#", "1"),
-					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.storage.storage_integration_fqn", "tenant:azure:blobstorage:blob-storage:devde1truefoundrydevelop"),
+					resource.TestCheckResourceAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.storage.storage_integration_fqn", "tenant:azure:blobstorage:blob-storage:mystorageaccount"),
 					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*", map[string]string{
 						"field":    "metadata",
 						"key":      "tfy_gateway_cluster",
 						"values.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*.values.*", "devde1truefoundrydevelop"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_data_routing_config.routing", "destinations.0.when.*.values.*", "eu-cluster"),
 				),
 			},
 			// In-place update: pinned default region with retention, no

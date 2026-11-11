@@ -1,3 +1,17 @@
+// Copyright 2026, Staffbase SE and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// You may obtain a copy of the License at
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package provider_test
 
 import (
@@ -21,8 +35,8 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 
       when = {
         models = [
-          "dev-de1-001-francecentral/gpt-4.1",
-          "dev-de1-001-francecentral/gpt-4o",
+          "azure-france/gpt-4.1",
+          "azure-france/gpt-4o",
         ]
       }
 
@@ -67,8 +81,8 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 
       when = {
         models = [
-          "dev-de1-001-francecentral/gpt-4o",
-          "dev-de1-001-francecentral/gpt-4.1",
+          "azure-france/gpt-4o",
+          "azure-france/gpt-4.1",
         ]
       }
 
@@ -111,7 +125,7 @@ func TestAccGatewayRateLimitingConfig_lifecycle(t *testing.T) {
 						"unit":            "tokens_per_day",
 						"when.subjects.#": "1",
 					}),
-					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.models.*", "dev-de1-001-francecentral/gpt-4o"),
+					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.models.*", "azure-france/gpt-4o"),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.when.subjects.*", "team:everyone"),
 				),
 			},
@@ -133,7 +147,7 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
       id = "per-app-cap"
 
       when = {
-        metadata = { tfy_gateway_cluster = "devde1truefoundrydevelop" }
+        metadata = { tfy_gateway_cluster = "eu-cluster" }
       }
 
       limit_to               = 120
@@ -149,7 +163,7 @@ resource "truefoundry_gateway_rate_limiting_config" "limits" {
 						"id":                                "per-app-cap",
 						"limit_to":                          "120",
 						"unit":                              "requests_per_hour",
-						"when.metadata.tfy_gateway_cluster": "devde1truefoundrydevelop",
+						"when.metadata.tfy_gateway_cluster": "eu-cluster",
 						"rate_limit_applies_per.#":          "2",
 					}),
 					resource.TestCheckTypeSetElemAttr("truefoundry_gateway_rate_limiting_config.limits", "rules.*.rate_limit_applies_per.*", "metadata.appId"),
