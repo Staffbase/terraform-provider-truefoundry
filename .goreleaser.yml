@@ -1,5 +1,5 @@
-# GoReleaser config for publishing to the Terraform Enterprise private registry
-# (and a GitHub release for visibility). Based on HashiCorp's
+# GoReleaser config for publishing to the public Terraform Registry, which
+# ingests the GitHub release this creates. Based on HashiCorp's
 # terraform-provider-scaffolding-framework template.
 version: 2
 
@@ -17,7 +17,6 @@ builds:
       - -trimpath
     ldflags:
       - "-s -w -X main.version={{ .Version }}"
-    # linux for TFE agents, darwin for developer machines
     goos:
       - linux
       - darwin
@@ -55,13 +54,13 @@ signs:
       - "${artifact}"
 
 release:
-  # release-drafter owns the release notes: publishing its draft creates the
-  # tag that triggers the release build, so leave the existing release
-  # untouched and only attach the artifacts.
+  # release-drafter owns the release notes. Upload to its draft and publish it
+  # only once every artifact is attached: the registry ingests a release when
+  # it is published and fails if the signed checksums are not there yet.
+  use_existing_draft: true
+  draft: false
   mode: keep-existing
-  # The registry manifest is not consumed by the TFE private registry API,
-  # but attaching it to the GitHub release keeps a later public-registry
-  # publish possible.
+  # The registry requires the manifest to declare the plugin protocol version.
   extra_files:
     - glob: "terraform-registry-manifest.json"
       name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"

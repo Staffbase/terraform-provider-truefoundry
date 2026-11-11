@@ -1,11 +1,11 @@
 # Releasing
 
-Releases are published to the Staffbase Terraform Enterprise private registry
-as `terraform.staffbase.com/staffbase/truefoundry`, plus a GitHub release for
-visibility. Pushing a `v*` tag triggers `.github/workflows/release.yml`:
-goreleaser builds and GPG-signs the artifacts, then `scripts/publish-tfe.sh`
-uploads them to the registry via the
-[TFE provider registry API](https://developer.hashicorp.com/terraform/enterprise/registry/publish-providers).
+Releases are published to the public Terraform Registry as
+[`staffbase/truefoundry`](https://registry.terraform.io/providers/staffbase/truefoundry).
+Pushing a `v*` tag triggers `.github/workflows/release.yml`: goreleaser builds
+and GPG-signs the artifacts, attaches them to the GitHub release and publishes
+it. The registry receives a webhook for every published release and ingests
+the version from its assets.
 
 ## Cutting a release
 
@@ -14,111 +14,72 @@ to date on every push to `main`; the next version is resolved from PR labels
 (`breaking` → major, `feature`/`enhancement` → minor, everything else →
 patch).
 
-To release: open the [draft release](https://github.com/Staffbase/terraform-provider-truefoundry/releases),
-review notes and version, and click **Publish**. Publishing creates the `v*`
-tag, which triggers the *Release* workflow (goreleaser attaches the signed
-artifacts to the release and `scripts/publish-tfe.sh` uploads them to the
-registry).
+To release:
 
-Pushing a tag manually also works (the workflow then creates the GitHub
-release itself, without drafted notes):
+1. Open the [draft release](https://github.com/Staffbase/terraform-provider-truefoundry/releases)
+   and review the notes and the version. **Do not click Publish**: the
+   registry would ingest the release before its artifacts are attached and
+   fail.
+2. Push the tag shown in the draft:
 
-```sh
-git checkout main && git pull
-git tag v0.2.0
-git push origin v0.2.0
-```
+   ```sh
+   git checkout main && git pull
+   git tag v0.15.0
+   git push origin v0.15.0
+   ```
 
-Watch the *Release* workflow. When it finishes, the version is visible at
-<https://terraform.staffbase.com/app/staffbase/registry/providers/private/staffbase/truefoundry>
-and consumable with:
+3. Watch the *Release* workflow. goreleaser uploads the artifacts to the
+   draft (`use_existing_draft`) and publishes it once all are attached.
 
-```hcl
-terraform {
-  required_providers {
-    truefoundry = {
-      source  = "terraform.staffbase.com/staffbase/truefoundry"
-      version = "~> 0.2"
-    }
-  }
-}
-```
+The version shows up on the registry within a few minutes. If it does not,
+open the provider's settings on the registry and click **Resync**, and check
+the registry's email to the publishing account for ingestion errors.
 
-Registry versions are immutable: the publish script refuses to overwrite an
-existing version. To re-release, delete the version in the TFE registry UI
-first, or (better) tag a new patch version.
+Registry versions cannot be overwritten. To fix a broken release, tag a new
+patch version. A version can be deleted in the registry settings, but
+consumers that already locked it will then fail to install it.
 
-## One-time bootstrap
+## Signing key
 
-Everything below has to happen only once (or when rotating keys/tokens).
+The registry verifies the detached signature of every `SHA256SUMS` file
+against the public keys registered for the `staffbase` namespace. The
+signing key is RSA (the registry does not accept ECC keys) with fingerprint
+`B626E235596F9B5821190F1DF245E42A6E40E02D`. Its private half and passphrase
+are stored as the repository secrets `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`.
 
-### 1. Generate the GPG signing key
+To rotate it, generate a new RSA key (`gpg --full-generate-key`, RSA sign
+only, 4096 bits), add its ASCII-armored public key to the namespace under
+**User Settings → Signing Keys** on the registry, then replace both secrets.
+Keep the old public key registered: the registry verifies existing versions
+against it.
 
-TFE requires the `SHA256SUMS` file of every provider version to carry a
-detached GPG signature from a registered key. Generate a dedicated key:
+## One-time setup for the public registry
 
-```sh
-gpg --full-generate-key
-# kind: RSA (sign only), size: 4096, expiry: 0 (does not expire)
-# real name: Staffbase TrueFoundry Terraform Provider Signing
-# email: <team email>
-# choose a strong passphrase and keep it for step 3
+1. Make the repository public. The registry only reads public repositories.
+2. Allow the *Terraform Registry* OAuth app for the `Staffbase` GitHub
+   organization (organization owner, *Settings → Third-party access*).
+3. Sign in to <https://registry.terraform.io> with a GitHub account that is
+   an admin of the repository, and add the public signing key (see above)
+   for the `staffbase` namespace under **User Settings → Signing Keys**:
 
-gpg --list-secret-keys --keyid-format long  # note the fingerprint
-gpg --armor --export <FINGERPRINT> > gpg-public.asc
-gpg --armor --export-secret-keys <FINGERPRINT> > gpg-private.asc  # handle with care, delete after step 3
-```
+   ```sh
+   gpg --armor --export B626E235596F9B5821190F1DF245E42A6E40E02D
+   ```
 
-### 2. Register the public key in the registry
-
-Requires a TFE token with *Manage Private Registry* permission on the
-`staffbase` organization (see step 3 for the token):
-
-```sh
-curl -sS --fail-with-body \
-  -H "Authorization: Bearer $TFE_TOKEN" \
-  -H "Content-Type: application/vnd.api+json" \
-  -d "$(jq -n --rawfile key gpg-public.asc \
-        '{data: {type: "gpg-keys", attributes: {namespace: "staffbase", "ascii-armor": $key}}}')" \
-  https://terraform.staffbase.com/api/registry/private/v2/gpg-keys
-```
-
-Verify with
-`curl -H "Authorization: Bearer $TFE_TOKEN" "https://terraform.staffbase.com/api/registry/private/v2/gpg-keys?filter%5Bnamespace%5D=staffbase"`.
-
-### 3. Create the GitHub Actions secrets
-
-In this repository (Settings → Secrets and variables → Actions):
-
-| Secret            | Value                                                              |
-| ----------------- | ------------------------------------------------------------------ |
-| `GPG_PRIVATE_KEY` | contents of `gpg-private.asc`                                      |
-| `GPG_PASSPHRASE`  | the key's passphrase                                               |
-| `TFE_TOKEN`       | TFE token with *Manage Private Registry* on the `staffbase` org    |
-
-For `TFE_TOKEN`, prefer a [team token](https://developer.hashicorp.com/terraform/enterprise/users-teams-organizations/api-tokens#team-api-tokens)
-of a dedicated team that has only the *Manage Private Registry*
-organization permission — not the organization token, which has far broader
-rights.
-
-Afterwards delete the local `gpg-private.asc`.
+4. **Publish → Provider**, choose `Staffbase/terraform-provider-truefoundry`.
+   The registry installs a webhook on the repository. Use **Resync** if
+   older releases are missing afterwards.
 
 ## Publishing manually (escape hatch)
 
-If CI is unavailable, the same flow works locally:
+If CI is unavailable, run goreleaser locally with the signing key imported:
 
 ```sh
-GPG_FINGERPRINT=<fingerprint> goreleaser release --clean --skip=publish
-TFE_TOKEN=<token> GPG_FINGERPRINT=<fingerprint> ./scripts/publish-tfe.sh
+GPG_FINGERPRINT=<fingerprint> GITHUB_TOKEN=<token> goreleaser release --clean
 ```
-
-The script creates the provider registry entry on first use, so no manual
-setup is needed beyond the GPG key and token above.
 
 ## Notes
 
-- The TFE private registry does **not** render provider documentation; the
-  generated `docs/` directory serves GitHub readers.
-- `terraform-registry-manifest.json` (protocol `6.0`) is not consumed by the
-  TFE API but is attached to GitHub releases to keep a later public-registry
-  publish possible.
+- The registry renders the documentation from `docs/` at the released tag.
+- `terraform-registry-manifest.json` (protocol `6.0`) is attached to every
+  release; the registry rejects releases without it.
