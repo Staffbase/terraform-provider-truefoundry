@@ -3,7 +3,8 @@ version: 2
 updates:
   - package-ecosystem: "gomod"
     directory: "/"
-    # Explicit labels: a bump must not pick up `major`, which maps to a breaking release.
+    # Dependabot still adds `major`/`minor`/`patch` on its own; release-drafter
+    # ignores them on `dependencies` PRs, so a bump stays a patch release.
     labels:
       - "dependencies"
       - "chore"
@@ -18,7 +19,8 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
-    # Explicit labels: a bump must not pick up `major`, which maps to a breaking release.
+    # Dependabot still adds `major`/`minor`/`patch` on its own; release-drafter
+    # ignores them on `dependencies` PRs, so a bump stays a patch release.
     labels:
       - "dependencies"
       - "chore"
