@@ -43,6 +43,7 @@ const (
 	applyPath        = "/api/svc/v1/apply"
 	deletePath       = "/api/svc/v1/delete"
 	integrationsPath = "/api/svc/v1/provider-integrations"
+	accountsPath     = "/api/svc/v1/provider-accounts"
 
 	// maxResponseBody caps how much of a response body we buffer. Set well
 	// above the largest observed payload (the tenant-wide integrations list,
@@ -373,6 +374,31 @@ func (c *Client) Delete(ctx context.Context, manifest any) error {
 	}
 	c.invalidateListCache()
 	return nil
+}
+
+// GetProviderAccount returns the provider account with the given FQN, or nil
+// if it does not exist. Custom endpoint accounts must be read this way: the
+// Cloud control plane does not list their integrations under
+// provider-integrations (2026-11-11). The list ignores ?type=, so match the
+// FQN client-side and keep paging in case ?fqn= is ignored too.
+func (c *Client) GetProviderAccount(ctx context.Context, fqn string) (*EmbeddedProviderAccount, error) {
+	offset := 0
+	for {
+		q := url.Values{"fqn": {fqn}, "offset": {strconv.Itoa(offset)}, "limit": {"100"}}
+		var page listIntegrationsResponse[EmbeddedProviderAccount]
+		if err := c.do(ctx, http.MethodGet, accountsPath, q, nil, &page); err != nil {
+			return nil, err
+		}
+		for i := range page.Data {
+			if page.Data[i].FQN == fqn {
+				return &page.Data[i], nil
+			}
+		}
+		offset += len(page.Data)
+		if len(page.Data) == 0 || offset >= page.Pagination.Total {
+			return nil, nil
+		}
+	}
 }
 
 // ListModelIntegrations returns all gateway model integrations, following

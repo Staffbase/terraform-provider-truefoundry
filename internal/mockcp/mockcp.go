@@ -103,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/svc/v1/apply", s.auth(s.handleApply))
 	mux.HandleFunc("POST /api/svc/v1/delete", s.auth(s.handleDelete))
 	mux.HandleFunc("GET /api/svc/v1/provider-integrations", s.auth(s.handleListIntegrations))
+	mux.HandleFunc("GET /api/svc/v1/provider-accounts", s.auth(s.handleListProviderAccounts))
 	mux.HandleFunc("GET /api/svc/v1/mcp-servers", s.auth(s.handleListMcpServers))
 	mux.HandleFunc("GET /api/svc/v1/secret-groups", s.auth(s.handleListSecretGroups))
 	mux.HandleFunc("GET /api/svc/v1/secret-groups/{id}", s.auth(s.handleGetSecretGroup))
@@ -1791,6 +1792,47 @@ func (s *Server) handleListIntegrations(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// handleListProviderAccounts serves GET /api/svc/v1/provider-accounts with
+// the full stored manifest, integrations included. Only ?fqn= is honored; the
+// real control plane ignores ?type=.
+func (s *Server) handleListProviderAccounts(w http.ResponseWriter, r *http.Request) {
+	fqnFilter := r.URL.Query().Get("fqn")
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit, err := strconv.Atoi(r.URL.Query().Get("limit"))
+	if err != nil || limit <= 0 {
+		limit = 100
+	}
+
+	s.mu.Lock()
+	items := []map[string]any{}
+	for name, acc := range s.accounts {
+		typ, _ := acc.manifest["type"].(string)
+		fqn := accountFQN(typ, name)
+		if fqnFilter != "" && fqn != fqnFilter {
+			continue
+		}
+		items = append(items, map[string]any{
+			"id":       acc.id,
+			"name":     name,
+			"fqn":      fqn,
+			"provider": strings.TrimPrefix(typ, "provider-account/"),
+			"manifest": acc.manifest,
+		})
+	}
+	s.mu.Unlock()
+
+	sort.Slice(items, func(i, j int) bool { return items[i]["fqn"].(string) < items[j]["fqn"].(string) })
+	total := len(items)
+	if offset > total {
+		offset = total
+	}
+	end := min(offset+limit, total)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":       items[offset:end],
+		"pagination": map[string]int{"total": total, "offset": offset, "limit": limit},
+	})
+}
+
 // maskSlackWebhookURL returns a copy of a notification-channel integration
 // manifest with auth_data.webhook_url replaced by "[redacted]", mirroring
 // the real control plane's masking of slack-webhook auth data on read.
@@ -1822,6 +1864,10 @@ func integrationKindFor(accountType string) string {
 		return "secret-store"
 	case "provider-account/truefoundry":
 		return "secret-store"
+	case "provider-account/custom-endpoint":
+		// The Cloud control plane lists custom endpoint integrations under no
+		// type; they are only readable through provider-accounts.
+		return ""
 	default:
 		return "model"
 	}

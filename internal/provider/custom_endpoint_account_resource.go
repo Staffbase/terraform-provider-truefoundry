@@ -321,39 +321,29 @@ func (r *customEndpointAccountResource) Read(ctx context.Context, req resource.R
 	}
 	imported := consumeImportMark(ctx, req, resp)
 
-	// Custom endpoint integrations are listed as "model" integrations.
-	integrations, err := r.client.ListModelIntegrations(ctx, "")
+	account, err := r.client.GetProviderAccount(ctx, state.FQN.ValueString())
 	if err != nil {
-		resp.Diagnostics.AddError("Reading TrueFoundry custom endpoint integrations failed", err.Error())
+		resp.Diagnostics.AddError("Reading TrueFoundry custom endpoint account failed", err.Error())
 		return
 	}
-
-	var account *client.EmbeddedProviderAccount
-	remote := map[string]client.ModelIntegration{}
-	for _, integration := range integrations {
-		if integration.ProviderAccountFQN != state.FQN.ValueString() {
-			continue
-		}
-		remote[integration.Manifest.Name] = integration.Manifest
-		if account == nil && integration.ProviderAccount != nil {
-			account = integration.ProviderAccount
-		}
-	}
-	if len(remote) == 0 {
-		tflog.Info(ctx, "custom endpoint account has no endpoints on the control plane; removing from state",
+	if account == nil {
+		tflog.Info(ctx, "custom endpoint account not found on the control plane; removing from state",
 			map[string]any{"fqn": state.FQN.ValueString()})
 		resp.State.RemoveResource(ctx)
 		return
 	}
 
-	if account != nil {
-		state.ID = types.StringValue(account.ID)
-		state.Name = types.StringValue(account.Manifest.Name)
-		state.EndpointType = stringOrNull(account.Manifest.EndpointType)
-		state.RoutingType = stringOrNull(account.Manifest.RoutingType)
-		state.Slug = stringOrNull(account.Manifest.Slug)
-		state.Collaborators = refreshCollaborators(state.Collaborators, account.Manifest.Collaborators, imported)
+	remote := map[string]client.ModelIntegration{}
+	for _, integration := range account.Manifest.Integrations {
+		remote[integration.Name] = integration
 	}
+
+	state.ID = types.StringValue(account.ID)
+	state.Name = types.StringValue(account.Manifest.Name)
+	state.EndpointType = stringOrNull(account.Manifest.EndpointType)
+	state.RoutingType = stringOrNull(account.Manifest.RoutingType)
+	state.Slug = stringOrNull(account.Manifest.Slug)
+	state.Collaborators = refreshCollaborators(state.Collaborators, account.Manifest.Collaborators, imported)
 
 	// Rebuild the list keeping configured order for entries that still exist
 	// and appending unknown remote entries in name order, so pure refreshes

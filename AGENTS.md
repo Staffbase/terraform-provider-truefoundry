@@ -29,6 +29,7 @@ Endpoints and envelopes are inconsistent. Check the client code before assuming;
 ### Provider accounts
 
 - No GET endpoint. `Read` rebuilds the account from `provider-integrations?type=` entries, each embedding `providerAccount`. So every account needs ≥1 model (zero integrations looks like a deleted account). `import` takes the account FQN.
+- Custom endpoint accounts are the exception: Cloud lists their integrations under no `provider-integrations` type (2026-11-11), so `Read` uses `GET provider-accounts?fqn=` (full manifest, empty `data` when missing; `?type=` is ignored, `/{id}` answers 400 for unknown IDs).
 - `auth_data.api_key` returns as stored: secret refs round-trip, raw keys land in state.
 - Non-model account types have own resources and `?type=` filters (`blob-storage`, `notification-channel`, `secret-store`; the last is shared by hashicorp and truefoundry accounts).
 - Credentials are verified at apply for some types (Azure blob, Vault) but not others (Slack).
