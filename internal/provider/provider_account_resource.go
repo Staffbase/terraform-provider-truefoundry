@@ -261,7 +261,7 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 								},
 								"output": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for output tokens. Must not be set with `public_cost`.",
+									Description: "Cost per metric unit for output tokens. Required with `input`; must not be set with `public_cost`.",
 								},
 								"cache_read": schema.Float64Attribute{
 									Optional:    true,
@@ -542,6 +542,10 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 				if scalar && (!m.Cost.Output.IsNull() || !m.Cost.CacheRead.IsNull() || !m.Cost.CacheWrite.IsNull()) {
 					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
 						fmt.Sprintf("Model %q: `output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.", name))
+				}
+				if tokenBased && m.Cost.Output.IsNull() {
+					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
+						fmt.Sprintf("Model %q: `output` is required with `input` (set it to 0 for models billed on input tokens only).", name))
 				}
 			}
 		}

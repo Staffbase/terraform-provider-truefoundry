@@ -124,12 +124,30 @@ func TestApplyPublicCostRoundTrip(t *testing.T) {
 	}
 }
 
+func TestApplyPublicCostWithValueIsStoredButNotRead(t *testing.T) {
+	c, mock := newTestClient(t)
+	ctx := context.Background()
+	cost := &client.ModelCostMetric{Metric: client.PublicCostMetric, Value: &client.CostValue{Input: ptr(0.001), Output: ptr(0.002)}}
+	if _, err := c.Apply(ctx, costManifest(cost), false); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if stored := mock.IntegrationCost("acct-cost", "gpt-4o"); stored["value"] == nil {
+		t.Errorf("stored cost = %v, want the value kept as sent", stored)
+	}
+	all, err := c.ListModelIntegrations(ctx, "")
+	if err != nil {
+		t.Fatalf("ListModelIntegrations: %v", err)
+	}
+	if got := all[0].Manifest.Cost; got == nil || got.Value != nil {
+		t.Errorf("read back cost = %+v, want public_cost without value", got)
+	}
+}
+
 func TestApplyRejectsInvalidCost(t *testing.T) {
 	cases := map[string]*client.ModelCostMetric{
-		"public with value":   {Metric: client.PublicCostMetric, Value: &client.CostValue{Input: ptr(0.001), Output: ptr(0.002)}},
-		"public with scalar":  {Metric: client.PublicCostMetric, Value: &client.CostValue{Amount: ptr(0.001)}},
-		"private no value":    {Metric: "per_1000_tokens"},
-		"token without input": {Metric: "per_1000_tokens", Value: &client.CostValue{Output: ptr(0.002)}},
+		"private no value":     {Metric: "per_1000_tokens"},
+		"token without input":  {Metric: "per_1000_tokens", Value: &client.CostValue{Output: ptr(0.002)}},
+		"token without output": {Metric: "per_1000_tokens", Value: &client.CostValue{Input: ptr(0.001)}},
 	}
 	for name, cost := range cases {
 		t.Run(name, func(t *testing.T) {

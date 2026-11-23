@@ -1912,9 +1912,11 @@ func integrationKindFor(accountType string) string {
 	}
 }
 
-// validateModelCost checks the `cost` block of a model integration: public
-// pricing carries no value; every other metric needs one, a number for scalar
-// metrics or an object with input for token-based metrics.
+// validateModelCost checks the `cost` block of a model integration:
+// public_cost needs no value, all other metrics need one, a number for scalar
+// metrics or an object with input and output for token-based ones (verified
+// with dryRun applies on 2026-11-23). The control plane also stores a value
+// sent with public_cost; the provider rejects that combination at plan time.
 func validateModelCost(raw any) string {
 	cost, ok := raw.(map[string]any)
 	if !ok {
@@ -1924,23 +1926,22 @@ func validateModelCost(raw any) string {
 	if metric == "" {
 		return "cost.metric is required"
 	}
-	value, hasValue := cost["value"]
 	if metric == "public_cost" {
-		if hasValue {
-			return "cost.value must not be set with metric public_cost"
-		}
 		return ""
 	}
-	switch v := value.(type) {
+	switch v := cost["value"].(type) {
 	case float64:
 		return ""
 	case map[string]any:
 		if _, ok := v["input"].(float64); !ok {
-			return "cost.value.input is required for token-based metrics"
+			return "cost.value must have required property 'input'"
+		}
+		if _, ok := v["output"].(float64); !ok {
+			return "cost.value must have required property 'output'"
 		}
 		return ""
 	default:
-		return fmt.Sprintf("cost.value is required for metric %q", metric)
+		return "cost must have required property 'value'"
 	}
 }
 

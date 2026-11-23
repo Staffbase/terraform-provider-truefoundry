@@ -202,7 +202,7 @@ Optional:
 - `cache_read` (Number) Cost per metric unit for cache reads. Must not be set with `public_cost`.
 - `cache_write` (Number) Cost per metric unit for cache writes. Must not be set with `public_cost`.
 - `input` (Number) Cost per metric unit for input tokens. Mutually exclusive with `value`; must not be set with `public_cost`.
-- `output` (Number) Cost per metric unit for output tokens. Must not be set with `public_cost`.
+- `output` (Number) Cost per metric unit for output tokens. Required with `input`; must not be set with `public_cost`.
 - `value` (Number) Cost per metric unit for scalar metrics. Mutually exclusive with `input`; must not be set with `public_cost`.
 
 
