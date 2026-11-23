@@ -198,7 +198,9 @@ func (s *Server) IntegrationCost(account, integration string) map[string]any {
 
 // SetIntegrationCostValue sets cost.value of one model integration of the
 // named account out-of-band, simulating a control plane that returns rates
-// with a cost block (e.g. resolved catalog rates for public_cost).
+// with a cost block (e.g. resolved catalog rates for public_cost). List
+// handlers encode stored maps after unlocking, so the manifest is replaced
+// copy-on-write instead of mutated.
 func (s *Server) SetIntegrationCostValue(account, integration string, value any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -207,12 +209,23 @@ func (s *Server) SetIntegrationCostValue(account, integration string, value any)
 		return
 	}
 	integrations, _ := a.manifest["integrations"].([]any)
-	for _, raw := range integrations {
+	updated := make([]any, len(integrations))
+	for i, raw := range integrations {
+		updated[i] = raw
 		m, _ := raw.(map[string]any)
-		if cost, ok := m["cost"].(map[string]any); ok && m["name"] == integration {
-			cost["value"] = value
+		cost, ok := m["cost"].(map[string]any)
+		if !ok || m["name"] != integration {
+			continue
 		}
+		cost = maps.Clone(cost)
+		cost["value"] = value
+		m = maps.Clone(m)
+		m["cost"] = cost
+		updated[i] = m
 	}
+	manifest := maps.Clone(a.manifest)
+	manifest["integrations"] = updated
+	a.manifest = manifest
 }
 
 // VirtualAccountCount returns the number of stored virtual accounts.
