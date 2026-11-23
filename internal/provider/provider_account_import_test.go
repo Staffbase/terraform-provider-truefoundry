@@ -59,6 +59,14 @@ resource "truefoundry_provider_account" "imp" {
         output = 0.0088
       }
     },
+    {
+      name            = "gpt-5-mini"
+      model_id        = "gpt-5-mini-deployment"
+      api_version     = "2024-10-21"
+      deployment_type = "datazone_eu"
+      model_types     = ["chat"]
+      cost            = { metric = "public_cost" }
+    },
   ]
 }
 `

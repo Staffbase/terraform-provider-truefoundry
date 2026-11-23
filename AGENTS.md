@@ -35,6 +35,7 @@ Endpoints and envelopes are inconsistent. Check the client code before assuming;
 - Credentials are verified at apply for some types (Azure blob, Vault) but not others (Slack).
 - `microsoft-foundry` has account-level `api_key` + endpoints and a required per-model `publisher`; `azure-foundry` has per-model auth. Control plane rejects `decision` on `azure-foundry`.
 - `decision` model type is ahead of the SDK (enforced server-side). Provider does not restrict model types per provider type.
+- Model `cost` (dryRun-probed 2026-11-23): `{"metric": "public_cost"}` without `value` is accepted on `microsoft-foundry` (both publishers, `decision` models, `deployment_type = global`) and `aws-bedrock`; `azure-foundry` (model `phi-4`) answered 400 `Public cost is not configured properly for this tenant`. Apply stores `cost` as sent, a `value` next to `public_cost` included: the provider rejects that at plan time, and the client drops any `value` read back with `public_cost` (no tenant model had public cost, so the read shape is unobserved). `per_1000_tokens` values need both `input` and `output`; `per_million_characters` and `per_minute_of_audio` take `input` alone per the SDK (not probed). Models without `cost` are tracked at $0.
 - `slack_account.webhooks[*].webhook_url` is masked as `"[redacted]"` on read. `Read` keeps prior state value; import reads `[redacted]` (test uses `ImportStateVerifyIgnore`). `bot_token` unprobed.
 
 ### Gateway configs and budgets

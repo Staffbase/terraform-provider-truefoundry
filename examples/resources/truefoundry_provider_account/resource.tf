@@ -35,7 +35,7 @@ resource "truefoundry_provider_account" "azure_openai" {
       region           = "francecentral"
       model_types      = ["chat", "responses"]
 
-      # Optional: pricing for gateway cost tracking.
+      # Optional: private pricing for gateway cost tracking, here per 1000 tokens.
       cost = {
         metric = "per_1000_tokens"
         input  = 0.0022
@@ -75,6 +75,9 @@ resource "truefoundry_provider_account" "bedrock" {
       name        = "cohere-rerank-v3-5"
       model_id    = "cohere.rerank-v3-5:0"
       model_types = ["rerank"]
+
+      # Optional: the provider's published rates from TrueFoundry's price catalog.
+      cost = { metric = "public_cost" }
     },
   ]
 }

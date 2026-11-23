@@ -390,6 +390,28 @@ resource "truefoundry_provider_account" "bad" {
 			want: regexp.MustCompile("Model \"gpt-4o\": exactly one of `value` \\(scalar metrics\\) or `input`"),
 		},
 		{
+			// The control plane requires output on token-based costs.
+			name: "token-based cost without output",
+			config: `
+resource "truefoundry_provider_account" "bad" {
+  name    = "spike-bad"
+  api_key = "sk"
+  models = [
+    {
+      name        = "gpt-4o"
+      model_id    = "gpt-4o"
+      model_types = ["chat"]
+      cost = {
+        metric = "per_1000_tokens"
+        input  = 0.001
+      }
+    },
+  ]
+}
+`,
+			want: regexp.MustCompile("Model \"gpt-4o\": `output` is required with `input`"),
+		},
+		{
 			name: "openai with region",
 			config: `
 resource "truefoundry_provider_account" "bad" {

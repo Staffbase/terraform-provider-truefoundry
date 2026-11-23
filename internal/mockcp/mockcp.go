@@ -176,6 +176,58 @@ func (s *Server) DropIntegrationAuthField(name, field string) {
 	}
 }
 
+// IntegrationCost returns the stored cost block of one model integration of
+// the named account, or nil if it has none.
+func (s *Server) IntegrationCost(account, integration string) map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[account]
+	if !ok {
+		return nil
+	}
+	integrations, _ := a.manifest["integrations"].([]any)
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if m["name"] == integration {
+			cost, _ := m["cost"].(map[string]any)
+			return maps.Clone(cost)
+		}
+	}
+	return nil
+}
+
+// SetIntegrationCostValue sets cost.value of one model integration of the
+// named account out-of-band, simulating a control plane that returns rates
+// with a cost block (e.g. resolved catalog rates for public_cost). List
+// handlers encode stored maps after unlocking, so the manifest is replaced
+// copy-on-write instead of mutated.
+func (s *Server) SetIntegrationCostValue(account, integration string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[account]
+	if !ok {
+		return
+	}
+	integrations, _ := a.manifest["integrations"].([]any)
+	updated := make([]any, len(integrations))
+	for i, raw := range integrations {
+		updated[i] = raw
+		m, _ := raw.(map[string]any)
+		cost, ok := m["cost"].(map[string]any)
+		if !ok || m["name"] != integration {
+			continue
+		}
+		cost = maps.Clone(cost)
+		cost["value"] = value
+		m = maps.Clone(m)
+		m["cost"] = cost
+		updated[i] = m
+	}
+	manifest := maps.Clone(a.manifest)
+	manifest["integrations"] = updated
+	a.manifest = manifest
+}
+
 // VirtualAccountCount returns the number of stored virtual accounts.
 func (s *Server) VirtualAccountCount() int {
 	s.mu.Lock()
@@ -1873,6 +1925,41 @@ func integrationKindFor(accountType string) string {
 	}
 }
 
+// validateModelCost checks the `cost` block of a model integration:
+// public_cost needs no value, all other metrics need one, a number for scalar
+// metrics or an object with input otherwise. per_1000_tokens also needs
+// output (verified with dryRun applies on 2026-11-23); the SDK defines
+// per_million_characters and per_minute_of_audio with input alone. The
+// control plane also stores a value sent with public_cost; the provider
+// rejects that combination at plan time.
+func validateModelCost(raw any) string {
+	cost, ok := raw.(map[string]any)
+	if !ok {
+		return "cost must be an object"
+	}
+	metric, _ := cost["metric"].(string)
+	if metric == "" {
+		return "cost.metric is required"
+	}
+	if metric == "public_cost" {
+		return ""
+	}
+	switch v := cost["value"].(type) {
+	case float64:
+		return ""
+	case map[string]any:
+		if _, ok := v["input"].(float64); !ok {
+			return "cost.value must have required property 'input'"
+		}
+		if _, ok := v["output"].(float64); !ok && metric == "per_1000_tokens" {
+			return "cost.value must have required property 'output'"
+		}
+		return ""
+	default:
+		return "cost must have required property 'value'"
+	}
+}
+
 // validateManifest enforces the per-provider-type manifest rules the real
 // control plane validates, as derived from the TrueFoundry SDK schemas.
 func validateManifest(typ string, manifest map[string]any) string {
@@ -1882,6 +1969,15 @@ func validateManifest(typ string, manifest map[string]any) string {
 		return key != ""
 	}
 	integrations, _ := manifest["integrations"].([]any)
+
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if cost, ok := m["cost"]; ok {
+			if msg := validateModelCost(cost); msg != "" {
+				return msg
+			}
+		}
+	}
 
 	switch typ {
 	case "provider-account/openai":
