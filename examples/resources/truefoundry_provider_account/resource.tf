@@ -8,6 +8,9 @@ resource "truefoundry_provider_account" "openai" {
       name        = "gpt-4o"
       model_id    = "gpt-4o"
       model_types = ["chat", "responses"]
+
+      # Optional: the provider's published rates from TrueFoundry's price catalog.
+      cost = { metric = "public_cost" }
     },
     {
       # Decision models answer typed questions on /v1/decisions and bill input tokens only.
@@ -35,7 +38,7 @@ resource "truefoundry_provider_account" "azure_openai" {
       region           = "francecentral"
       model_types      = ["chat", "responses"]
 
-      # Optional: pricing for gateway cost tracking.
+      # Optional: private pricing for gateway cost tracking, here per 1000 tokens.
       cost = {
         metric = "per_1000_tokens"
         input  = 0.0022

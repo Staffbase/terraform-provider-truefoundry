@@ -23,6 +23,9 @@ resource "truefoundry_provider_account" "openai" {
       name        = "gpt-4o"
       model_id    = "gpt-4o"
       model_types = ["chat", "responses"]
+
+      # Optional: the provider's published rates from TrueFoundry's price catalog.
+      cost = { metric = "public_cost" }
     },
     {
       # Decision models answer typed questions on /v1/decisions and bill input tokens only.
@@ -50,7 +53,7 @@ resource "truefoundry_provider_account" "azure_openai" {
       region           = "francecentral"
       model_types      = ["chat", "responses"]
 
-      # Optional: pricing for gateway cost tracking.
+      # Optional: private pricing for gateway cost tracking, here per 1000 tokens.
       cost = {
         metric = "per_1000_tokens"
         input  = 0.0022
@@ -178,7 +181,7 @@ Optional:
 - `api_version` (String) Azure API version, e.g. 2024-10-21. Required for `azure-openai` models, optional for `azure-foundry` and `microsoft-foundry`.
 - `authorized_subjects` (Set of String) Subjects allowed to access this model, e.g. `user:jane@example.com` or `team:my-team`. The control plane rejects `serviceaccount:` subjects here. Unset means account-level access.
 - `azure_endpoint` (String) Azure AI Foundry endpoint URL, e.g. https://{deployment}.{region}.models.ai.azure.com. Required for `azure-foundry` models.
-- `cost` (Attributes) Optional pricing of this model, used for gateway cost tracking. Token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. Volume-based pricing tiers are not supported. (see [below for nested schema](#nestedatt--models--cost))
+- `cost` (Attributes) Optional pricing of this model, used for gateway cost tracking. Set only `metric = "public_cost"` to use the provider's published rates from TrueFoundry's price catalog, matched by provider type, model and `deployment_type` (an unmatched `deployment_type` falls back to the catalog's default rate). Otherwise set private rates: token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. Volume-based pricing tiers are not supported. (see [below for nested schema](#nestedatt--models--cost))
 - `deployment_type` (String) Azure deployment type. One of: `standard`, `datazone_us`, `datazone_eu`, `global` (`azure-openai` and `microsoft-foundry` only).
 - `foundation_model` (String) Foundation model identifier behind the deployment, e.g. gpt-4o-2024-11-20 (`azure-openai` and `microsoft-foundry` only).
 - `model_id` (String) Provider model identifier or Azure deployment name, e.g. gpt-4o. Required for all provider types except `virtual-model`.
@@ -192,15 +195,15 @@ Optional:
 
 Required:
 
-- `metric` (String) Cost metric, e.g. per_1000_tokens or per_1000_embedding_tokens.
+- `metric` (String) Cost metric: `public_cost`, or a private metric such as per_1000_tokens or per_1000_embedding_tokens.
 
 Optional:
 
-- `cache_read` (Number) Cost per metric unit for cache reads.
-- `cache_write` (Number) Cost per metric unit for cache writes.
-- `input` (Number) Cost per metric unit for input tokens. Mutually exclusive with `value`.
-- `output` (Number) Cost per metric unit for output tokens.
-- `value` (Number) Cost per metric unit for scalar metrics. Mutually exclusive with `input`.
+- `cache_read` (Number) Cost per metric unit for cache reads. Must not be set with `public_cost`.
+- `cache_write` (Number) Cost per metric unit for cache writes. Must not be set with `public_cost`.
+- `input` (Number) Cost per metric unit for input tokens. Mutually exclusive with `value`; must not be set with `public_cost`.
+- `output` (Number) Cost per metric unit for output tokens. Must not be set with `public_cost`.
+- `value` (Number) Cost per metric unit for scalar metrics. Mutually exclusive with `input`; must not be set with `public_cost`.
 
 
 <a id="nestedatt--models--routing"></a>

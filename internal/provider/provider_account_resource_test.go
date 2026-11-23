@@ -305,6 +305,24 @@ resource "truefoundry_provider_account" "bad" {
 `,
 			want: regexp.MustCompile(`string length must be between 3 and 64`),
 		},
+		{
+			name: "empty cost metric",
+			config: `
+resource "truefoundry_provider_account" "bad" {
+  name    = "spike-bad"
+  api_key = "sk"
+  models = [
+    {
+      name        = "gpt-4o"
+      model_id    = "gpt-4o"
+      model_types = ["chat"]
+      cost        = { metric = "", input = 0.0025, output = 0.01 }
+    },
+  ]
+}
+`,
+			want: regexp.MustCompile(`string length must be at least 1`),
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

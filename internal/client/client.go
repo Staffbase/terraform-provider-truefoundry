@@ -179,11 +179,36 @@ func (v *CostValue) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// PublicCostMetric selects public pricing: the gateway takes the rates from
+// TrueFoundry's price catalog, matched by provider type, model and
+// deployment_type, so the cost block carries no value.
+const PublicCostMetric = "public_cost"
+
 // ModelCostMetric is the optional `cost` block of a model integration,
-// e.g. {"metric": "per_1000_tokens", "value": {"input": 0.0022, "output": 0.0088}}.
+// e.g. {"metric": "per_1000_tokens", "value": {"input": 0.0022, "output": 0.0088}}
+// or {"metric": "public_cost"}.
 type ModelCostMetric struct {
-	Metric string    `json:"metric"`
-	Value  CostValue `json:"value"`
+	Metric string     `json:"metric"`
+	Value  *CostValue `json:"value,omitempty"`
+}
+
+// UnmarshalJSON drops any value sent with public pricing undecoded: it has
+// no rates of its own, and an unexpected shape there must not fail the whole
+// integrations listing (which every provider account read depends on).
+func (m *ModelCostMetric) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Metric string          `json:"metric"`
+		Value  json.RawMessage `json:"value"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	m.Metric, m.Value = raw.Metric, nil
+	if raw.Metric == PublicCostMetric || len(raw.Value) == 0 || string(raw.Value) == "null" {
+		return nil
+	}
+	m.Value = &CostValue{}
+	return json.Unmarshal(raw.Value, m.Value)
 }
 
 // HeadersOverride mutates upstream request headers for a routing target.

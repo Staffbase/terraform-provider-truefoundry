@@ -176,6 +176,45 @@ func (s *Server) DropIntegrationAuthField(name, field string) {
 	}
 }
 
+// IntegrationCost returns the stored cost block of one model integration of
+// the named account, or nil if it has none.
+func (s *Server) IntegrationCost(account, integration string) map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[account]
+	if !ok {
+		return nil
+	}
+	integrations, _ := a.manifest["integrations"].([]any)
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if m["name"] == integration {
+			cost, _ := m["cost"].(map[string]any)
+			return maps.Clone(cost)
+		}
+	}
+	return nil
+}
+
+// SetIntegrationCostValue sets cost.value of one model integration of the
+// named account out-of-band, simulating a control plane that returns rates
+// with a cost block (e.g. resolved catalog rates for public_cost).
+func (s *Server) SetIntegrationCostValue(account, integration string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[account]
+	if !ok {
+		return
+	}
+	integrations, _ := a.manifest["integrations"].([]any)
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if cost, ok := m["cost"].(map[string]any); ok && m["name"] == integration {
+			cost["value"] = value
+		}
+	}
+}
+
 // VirtualAccountCount returns the number of stored virtual accounts.
 func (s *Server) VirtualAccountCount() int {
 	s.mu.Lock()
@@ -1873,6 +1912,38 @@ func integrationKindFor(accountType string) string {
 	}
 }
 
+// validateModelCost checks the `cost` block of a model integration: public
+// pricing carries no value; every other metric needs one, a number for scalar
+// metrics or an object with input for token-based metrics.
+func validateModelCost(raw any) string {
+	cost, ok := raw.(map[string]any)
+	if !ok {
+		return "cost must be an object"
+	}
+	metric, _ := cost["metric"].(string)
+	if metric == "" {
+		return "cost.metric is required"
+	}
+	value, hasValue := cost["value"]
+	if metric == "public_cost" {
+		if hasValue {
+			return "cost.value must not be set with metric public_cost"
+		}
+		return ""
+	}
+	switch v := value.(type) {
+	case float64:
+		return ""
+	case map[string]any:
+		if _, ok := v["input"].(float64); !ok {
+			return "cost.value.input is required for token-based metrics"
+		}
+		return ""
+	default:
+		return fmt.Sprintf("cost.value is required for metric %q", metric)
+	}
+}
+
 // validateManifest enforces the per-provider-type manifest rules the real
 // control plane validates, as derived from the TrueFoundry SDK schemas.
 func validateManifest(typ string, manifest map[string]any) string {
@@ -1882,6 +1953,15 @@ func validateManifest(typ string, manifest map[string]any) string {
 		return key != ""
 	}
 	integrations, _ := manifest["integrations"].([]any)
+
+	for _, raw := range integrations {
+		m, _ := raw.(map[string]any)
+		if cost, ok := m["cost"]; ok {
+			if msg := validateModelCost(cost); msg != "" {
+				return msg
+			}
+		}
+	}
 
 	switch typ {
 	case "provider-account/openai":

@@ -196,3 +196,165 @@ resource "truefoundry_provider_account" "bad" {
 		})
 	}
 }
+
+// microsoftFoundryCostConfig is a one-model account whose cost block is cost.
+func microsoftFoundryCostConfig(cost string) string {
+	return `
+resource "truefoundry_provider_account" "cost" {
+  name            = "spike-ms-cost"
+  provider_type   = "microsoft-foundry"
+  api_key         = "tenant:hashicorp:vault-secrets:secret-store:vault::models/foundry/value"
+  openai_endpoint = "https://spike.openai.azure.com"
+  models = [
+    {
+      name            = "gpt-5.6-luna"
+      model_id        = "gpt-5.6-luna"
+      publisher       = "OpenAI"
+      deployment_type = "datazone_eu"
+      model_types     = ["chat"]
+      cost            = ` + cost + `
+    },
+  ]
+}
+`
+}
+
+const (
+	privateLunaCost = `{
+        metric     = "per_1000_tokens"
+        input      = 0.00022
+        output     = 0.00132
+        cache_read = 0.000022
+      }`
+	publicCost = `{ metric = "public_cost" }`
+)
+
+var costRateAttrRegexp = regexp.MustCompile(`^models\.[^.]+\.cost\.(value|input|output|cache_read|cache_write)$`)
+
+// checkNoCostRates fails if any model of the account has a cost rate in state.
+func checkNoCostRates(name string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("%s not found in state", name)
+		}
+		for k, v := range rs.Primary.Attributes {
+			if costRateAttrRegexp.MatchString(k) {
+				return fmt.Errorf("%s = %q in state, want unset with public_cost", k, v)
+			}
+		}
+		return nil
+	}
+}
+
+// checkMockCost compares the cost block the mock stored for the luna model.
+func checkMockCost(mock *mockcp.Server, want func(map[string]any) error) resource.TestCheckFunc {
+	return func(*terraform.State) error {
+		return want(mock.IntegrationCost("spike-ms-cost", "gpt-5.6-luna"))
+	}
+}
+
+func TestAccProviderAccount_publicCost(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+	const addr = "truefoundry_provider_account.cost"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		CheckDestroy: func(*terraform.State) error {
+			if n := mock.AccountCount(); n != 0 {
+				return fmt.Errorf("%d provider accounts left after destroy, want 0", n)
+			}
+			return nil
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: providerConfig(host) + microsoftFoundryCostConfig(privateLunaCost),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckTypeSetElemNestedAttrs(addr, "models.*", map[string]string{
+						"cost.metric":     "per_1000_tokens",
+						"cost.input":      "0.00022",
+						"cost.output":     "0.00132",
+						"cost.cache_read": "0.000022",
+					}),
+					checkMockCost(mock, func(cost map[string]any) error {
+						if _, ok := cost["value"]; !ok {
+							return fmt.Errorf("stored cost %v has no value, want private rates", cost)
+						}
+						return nil
+					}),
+				),
+			},
+			// Switching to public pricing sends the metric alone.
+			{
+				Config: providerConfig(host) + microsoftFoundryCostConfig(publicCost),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckTypeSetElemNestedAttrs(addr, "models.*", map[string]string{
+						"cost.metric": "public_cost",
+					}),
+					checkNoCostRates(addr),
+					checkMockCost(mock, func(cost map[string]any) error {
+						if len(cost) != 1 || cost["metric"] != "public_cost" {
+							return fmt.Errorf("stored cost = %v, want only metric public_cost", cost)
+						}
+						return nil
+					}),
+				),
+			},
+			// Rates returned with public_cost (e.g. resolved from the catalog,
+			// in a shape the private cost decoder rejects) are not drift.
+			{
+				PreConfig: func() {
+					mock.SetIntegrationCostValue("spike-ms-cost", "gpt-5.6-luna", map[string]any{"input": 0.00022, "output": "1.32"})
+				},
+				PlanOnly: true,
+				Config:   providerConfig(host) + microsoftFoundryCostConfig(publicCost),
+			},
+			{
+				ResourceName:      addr,
+				ImportState:       true,
+				ImportStateVerify: true,
+				ImportStateIdFunc: func(s *terraform.State) (string, error) {
+					rs, ok := s.RootModule().Resources[addr]
+					if !ok {
+						return "", fmt.Errorf("resource not found in state")
+					}
+					return rs.Primary.Attributes["fqn"], nil
+				},
+			},
+			// And back to private rates.
+			{
+				Config: providerConfig(host) + microsoftFoundryCostConfig(privateLunaCost),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckTypeSetElemNestedAttrs(addr, "models.*", map[string]string{
+						"cost.metric":     "per_1000_tokens",
+						"cost.input":      "0.00022",
+						"cost.cache_read": "0.000022",
+					}),
+					checkMockCost(mock, func(cost map[string]any) error {
+						value, _ := cost["value"].(map[string]any)
+						if value["input"] != 0.00022 {
+							return fmt.Errorf("stored cost = %v, want input 0.00022", cost)
+						}
+						return nil
+					}),
+				),
+			},
+		},
+	})
+}
+
+func TestAccProviderAccount_publicCostRejectsRates(t *testing.T) {
+	_, host := startMockControlPlane(t)
+
+	for _, attr := range []string{"value", "input", "output", "cache_read", "cache_write"} {
+		t.Run(attr, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				ProtoV6ProviderFactories: protoV6Factories,
+				Steps: []resource.TestStep{{
+					Config:      providerConfig(host) + microsoftFoundryCostConfig(`{ metric = "public_cost", `+attr+` = 0.001 }`),
+					ExpectError: regexp.MustCompile(`must\s+not\s+be\s+set\s+with\s+metric\s+"public_cost"`),
+				}},
+			})
+		})
+	}
+}

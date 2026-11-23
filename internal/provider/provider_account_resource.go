@@ -239,33 +239,37 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 						},
 						"cost": schema.SingleNestedAttribute{
 							Optional: true,
-							Description: "Optional pricing of this model, used for gateway cost tracking. Token-based metrics " +
-								"(e.g. per_1000_tokens) use `input`/`output` rates; scalar metrics (e.g. per_1000_embedding_tokens, " +
-								"per_minute_of_audio) use `value`. Volume-based pricing tiers are not supported.",
+							Description: "Optional pricing of this model, used for gateway cost tracking. Set only `metric = \"public_cost\"` " +
+								"to use the provider's published rates from TrueFoundry's price catalog, matched by provider type, model and " +
+								"`deployment_type` (an unmatched `deployment_type` falls back to the catalog's default rate). " +
+								"Otherwise set private rates: token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; " +
+								"scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. " +
+								"Volume-based pricing tiers are not supported.",
 							Attributes: map[string]schema.Attribute{
 								"metric": schema.StringAttribute{
 									Required:    true,
-									Description: "Cost metric, e.g. per_1000_tokens or per_1000_embedding_tokens.",
+									Description: "Cost metric: `public_cost`, or a private metric such as per_1000_tokens or per_1000_embedding_tokens.",
+									Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 								},
 								"value": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for scalar metrics. Mutually exclusive with `input`.",
+									Description: "Cost per metric unit for scalar metrics. Mutually exclusive with `input`; must not be set with `public_cost`.",
 								},
 								"input": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for input tokens. Mutually exclusive with `value`.",
+									Description: "Cost per metric unit for input tokens. Mutually exclusive with `value`; must not be set with `public_cost`.",
 								},
 								"output": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for output tokens.",
+									Description: "Cost per metric unit for output tokens. Must not be set with `public_cost`.",
 								},
 								"cache_read": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for cache reads.",
+									Description: "Cost per metric unit for cache reads. Must not be set with `public_cost`.",
 								},
 								"cache_write": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for cache writes.",
+									Description: "Cost per metric unit for cache writes. Must not be set with `public_cost`.",
 								},
 							},
 						},
@@ -521,15 +525,24 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 		}
 		if m.Cost != nil {
 			costPath := path.Root("models")
-			scalar := !m.Cost.Value.IsNull()
-			tokenBased := !m.Cost.Input.IsNull()
-			if scalar == tokenBased {
-				resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
-					fmt.Sprintf("Model %q: exactly one of `value` (scalar metrics) or `input` (token-based metrics) must be set.", name))
-			}
-			if scalar && (!m.Cost.Output.IsNull() || !m.Cost.CacheRead.IsNull() || !m.Cost.CacheWrite.IsNull()) {
-				resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
-					fmt.Sprintf("Model %q: `output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.", name))
+			if m.Cost.Metric.ValueString() == client.PublicCostMetric {
+				if !m.Cost.Value.IsNull() || !m.Cost.Input.IsNull() || !m.Cost.Output.IsNull() ||
+					!m.Cost.CacheRead.IsNull() || !m.Cost.CacheWrite.IsNull() {
+					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
+						fmt.Sprintf("Model %q: `value`, `input`, `output`, `cache_read`, and `cache_write` must not be set with metric %q; "+
+							"the rates come from TrueFoundry's price catalog.", name, client.PublicCostMetric))
+				}
+			} else {
+				scalar := !m.Cost.Value.IsNull()
+				tokenBased := !m.Cost.Input.IsNull()
+				if scalar == tokenBased {
+					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
+						fmt.Sprintf("Model %q: exactly one of `value` (scalar metrics) or `input` (token-based metrics) must be set.", name))
+				}
+				if scalar && (!m.Cost.Output.IsNull() || !m.Cost.CacheRead.IsNull() || !m.Cost.CacheWrite.IsNull()) {
+					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
+						fmt.Sprintf("Model %q: `output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.", name))
+				}
 			}
 		}
 		if m.Routing == nil {
@@ -768,15 +781,15 @@ func manifestFromModel(m *providerAccountModel) client.ProviderAccountManifest {
 			integration.RoutingConfig = routing
 		}
 		if model.Cost != nil {
-			integration.Cost = &client.ModelCostMetric{
-				Metric: model.Cost.Metric.ValueString(),
-				Value: client.CostValue{
+			integration.Cost = &client.ModelCostMetric{Metric: model.Cost.Metric.ValueString()}
+			if integration.Cost.Metric != client.PublicCostMetric {
+				integration.Cost.Value = &client.CostValue{
 					Amount:     float64OrNil(model.Cost.Value),
 					Input:      float64OrNil(model.Cost.Input),
 					Output:     float64OrNil(model.Cost.Output),
 					CacheRead:  float64OrNil(model.Cost.CacheRead),
 					CacheWrite: float64OrNil(model.Cost.CacheWrite),
-				},
+				}
 			}
 		}
 		for _, s := range model.AuthorizedSubjects {
@@ -821,11 +834,18 @@ func integrationToModel(manifest client.ModelIntegration, stateAPIKey types.Stri
 	if manifest.Cost != nil {
 		m.Cost = &costModel{
 			Metric:     types.StringValue(manifest.Cost.Metric),
-			Value:      float64OrNull(manifest.Cost.Value.Amount),
-			Input:      float64OrNull(manifest.Cost.Value.Input),
-			Output:     float64OrNull(manifest.Cost.Value.Output),
-			CacheRead:  float64OrNull(manifest.Cost.Value.CacheRead),
-			CacheWrite: float64OrNull(manifest.Cost.Value.CacheWrite),
+			Value:      types.Float64Null(),
+			Input:      types.Float64Null(),
+			Output:     types.Float64Null(),
+			CacheRead:  types.Float64Null(),
+			CacheWrite: types.Float64Null(),
+		}
+		if v := manifest.Cost.Value; v != nil {
+			m.Cost.Value = float64OrNull(v.Amount)
+			m.Cost.Input = float64OrNull(v.Input)
+			m.Cost.Output = float64OrNull(v.Output)
+			m.Cost.CacheRead = float64OrNull(v.CacheRead)
+			m.Cost.CacheWrite = float64OrNull(v.CacheWrite)
 		}
 	}
 	for _, s := range manifest.AuthorizedSubjects {
