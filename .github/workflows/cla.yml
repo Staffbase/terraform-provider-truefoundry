@@ -42,4 +42,4 @@ jobs:
           # mandates the trailer). The PR opener still has to sign.
           # Staffbase maintainers (GitHub logins) contribute under their
           # employment contract; remove them when they leave Staffbase.
-          allowlist: '0x46616c6b,staust,noreply@anthropic.com,noreply@opencode.ai,copilot@noreply.github.com,*[bot]'
+          allowlist: '0x46616c6b,staust,cstaud,noreply@anthropic.com,noreply@opencode.ai,copilot@noreply.github.com,*[bot]'
