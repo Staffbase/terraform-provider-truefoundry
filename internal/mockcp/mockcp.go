@@ -1927,9 +1927,11 @@ func integrationKindFor(accountType string) string {
 
 // validateModelCost checks the `cost` block of a model integration:
 // public_cost needs no value, all other metrics need one, a number for scalar
-// metrics or an object with input and output for token-based ones (verified
-// with dryRun applies on 2026-11-23). The control plane also stores a value
-// sent with public_cost; the provider rejects that combination at plan time.
+// metrics or an object with input otherwise. per_1000_tokens also needs
+// output (verified with dryRun applies on 2026-11-23); the SDK defines
+// per_million_characters and per_minute_of_audio with input alone. The
+// control plane also stores a value sent with public_cost; the provider
+// rejects that combination at plan time.
 func validateModelCost(raw any) string {
 	cost, ok := raw.(map[string]any)
 	if !ok {
@@ -1949,7 +1951,7 @@ func validateModelCost(raw any) string {
 		if _, ok := v["input"].(float64); !ok {
 			return "cost.value must have required property 'input'"
 		}
-		if _, ok := v["output"].(float64); !ok {
+		if _, ok := v["output"].(float64); !ok && metric == "per_1000_tokens" {
 			return "cost.value must have required property 'output'"
 		}
 		return ""

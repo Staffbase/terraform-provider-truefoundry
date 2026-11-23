@@ -241,14 +241,14 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 							Optional: true,
 							Description: "Optional pricing of this model, used for gateway cost tracking. Set only `metric = \"public_cost\"` " +
 								"to use the provider's published rates from TrueFoundry's price catalog, matched by provider type, model and " +
-								"`deployment_type` (an unmatched `deployment_type` falls back to the catalog's default rate). " +
-								"Otherwise set private rates: token-based metrics (e.g. per_1000_tokens) use `input`/`output` rates; " +
-								"scalar metrics (e.g. per_1000_embedding_tokens, per_minute_of_audio) use `value`. " +
+								"`deployment_type` (Azure; an unmatched `deployment_type` falls back to the catalog's default rate) or region (AWS Bedrock). " +
+								"Otherwise set private rates: `per_1000_tokens` uses `input` and `output` rates; `per_million_characters` and " +
+								"`per_minute_of_audio` use `input` alone; scalar metrics (e.g. per_1000_embedding_tokens) use `value`. " +
 								"Volume-based pricing tiers are not supported.",
 							Attributes: map[string]schema.Attribute{
 								"metric": schema.StringAttribute{
 									Required:    true,
-									Description: "Cost metric: `public_cost`, or a private metric such as per_1000_tokens or per_1000_embedding_tokens.",
+									Description: "Cost metric: `public_cost`, or a private metric such as per_1000_tokens, per_1000_embedding_tokens or per_minute_of_audio.",
 									Validators:  []validator.String{stringvalidator.LengthAtLeast(1)},
 								},
 								"value": schema.Float64Attribute{
@@ -257,11 +257,11 @@ func (r *providerAccountResource) Schema(_ context.Context, _ resource.SchemaReq
 								},
 								"input": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for input tokens. Mutually exclusive with `value`; must not be set with `public_cost`.",
+									Description: "Cost per metric unit for input tokens, characters or audio minutes. Mutually exclusive with `value`; must not be set with `public_cost`.",
 								},
 								"output": schema.Float64Attribute{
 									Optional:    true,
-									Description: "Cost per metric unit for output tokens. Required with `input`; must not be set with `public_cost`.",
+									Description: "Cost per metric unit for output tokens. Required with `input` for per_1000_tokens; must not be set with `public_cost`.",
 								},
 								"cache_read": schema.Float64Attribute{
 									Optional:    true,
@@ -543,9 +543,10 @@ func (r *providerAccountResource) ValidateConfig(ctx context.Context, req resour
 					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
 						fmt.Sprintf("Model %q: `output`, `cache_read`, and `cache_write` require `input` and cannot be combined with `value`.", name))
 				}
-				if tokenBased && m.Cost.Output.IsNull() {
+				if tokenBased && m.Cost.Output.IsNull() && m.Cost.Metric.ValueString() == client.PerThousandTokensCostMetric {
 					resp.Diagnostics.AddAttributeError(costPath, "Invalid model cost",
-						fmt.Sprintf("Model %q: `output` is required with `input` (set it to 0 for models billed on input tokens only).", name))
+						fmt.Sprintf("Model %q: `output` is required with `input` for metric %q (set it to 0 for models billed on input tokens only).",
+							name, client.PerThousandTokensCostMetric))
 				}
 			}
 		}

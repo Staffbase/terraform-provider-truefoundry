@@ -8,9 +8,6 @@ resource "truefoundry_provider_account" "openai" {
       name        = "gpt-4o"
       model_id    = "gpt-4o"
       model_types = ["chat", "responses"]
-
-      # Optional: the provider's published rates from TrueFoundry's price catalog.
-      cost = { metric = "public_cost" }
     },
     {
       # Decision models answer typed questions on /v1/decisions and bill input tokens only.
@@ -78,6 +75,9 @@ resource "truefoundry_provider_account" "bedrock" {
       name        = "cohere-rerank-v3-5"
       model_id    = "cohere.rerank-v3-5:0"
       model_types = ["rerank"]
+
+      # Optional: the provider's published rates from TrueFoundry's price catalog.
+      cost = { metric = "public_cost" }
     },
   ]
 }

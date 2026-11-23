@@ -213,6 +213,55 @@ resource "truefoundry_provider_account" "openai" {
 	})
 }
 
+// per_million_characters and per_minute_of_audio take an input rate alone;
+// only per_1000_tokens needs output next to it.
+func TestAccProviderAccount_inputOnlyCostMetrics(t *testing.T) {
+	mock, host := startMockControlPlane(t)
+	config := providerConfig(host) + `
+resource "truefoundry_provider_account" "audio" {
+  name    = "spike-audio"
+  api_key = "sk-upstream-secret"
+  models = [
+    {
+      name        = "tts-1"
+      model_id    = "tts-1"
+      model_types = ["text_to_speech"]
+      cost        = { metric = "per_million_characters", input = 15 }
+    },
+    {
+      name        = "whisper-1"
+      model_id    = "whisper-1"
+      model_types = ["audio_transcription"]
+      cost        = { metric = "per_minute_of_audio", input = 0.006 }
+    },
+  ]
+}
+`
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: protoV6Factories,
+		Steps: []resource.TestStep{
+			{
+				Config: config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckTypeSetElemNestedAttrs("truefoundry_provider_account.audio", "models.*", map[string]string{
+						"name":        "whisper-1",
+						"cost.metric": "per_minute_of_audio",
+						"cost.input":  "0.006",
+					}),
+					func(*terraform.State) error {
+						value, _ := mock.IntegrationCost("spike-audio", "whisper-1")["value"].(map[string]any)
+						if len(value) != 1 || value["input"] != 0.006 {
+							return fmt.Errorf("stored cost value = %v, want only input 0.006", value)
+						}
+						return nil
+					},
+				),
+			},
+			{PlanOnly: true, Config: config},
+		},
+	})
+}
+
 func TestAccProviderAccount_invalidConfigRejected(t *testing.T) {
 	_, host := startMockControlPlane(t)
 

@@ -45,6 +45,11 @@ func TestModelCostMetricWireFormat(t *testing.T) {
 			cost: client.ModelCostMetric{Metric: "per_1000_embedding_tokens", Value: &client.CostValue{Amount: ptr(0.000143)}},
 			want: `{"metric":"per_1000_embedding_tokens","value":0.000143}`,
 		},
+		{
+			name: "input only",
+			cost: client.ModelCostMetric{Metric: "per_minute_of_audio", Value: &client.CostValue{Input: ptr(0.006)}},
+			want: `{"metric":"per_minute_of_audio","value":{"input":0.006}}`,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

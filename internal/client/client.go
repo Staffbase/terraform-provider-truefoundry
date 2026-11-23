@@ -184,6 +184,11 @@ func (v *CostValue) UnmarshalJSON(data []byte) error {
 // deployment_type, so the cost block carries no value.
 const PublicCostMetric = "public_cost"
 
+// PerThousandTokensCostMetric is the only metric whose value needs an output
+// rate next to input; per_million_characters and per_minute_of_audio take
+// input alone.
+const PerThousandTokensCostMetric = "per_1000_tokens"
+
 // ModelCostMetric is the optional `cost` block of a model integration,
 // e.g. {"metric": "per_1000_tokens", "value": {"input": 0.0022, "output": 0.0088}}
 // or {"metric": "public_cost"}.
